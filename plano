@@ -1,0 +1,73 @@
+Plano Geral Arquitetural: BI BHS Soluções Inteligentes
+A integração da biblioteca shadcn/ui (referenciada como Chadezen) é a escolha técnica ideal para replicar a estética da Cloudflare. O shadcn/ui não impõe um design fechado; ele injeta os componentes no seu código, permitindo que o Tailwind CSS molde cada borda e espaçamento para atingir o visual técnico, minimalista (fundo branco, grid denso, alto data-ink ratio) e de altíssima performance exigido.
+
+1. Stack Tecnológico e UI/UX
+Core: React, TypeScript, Vite.
+
+Estilização e UI: Tailwind CSS integrado com shadcn/ui (para botões, modais, cards, popovers, dropdowns).
+
+Gráficos e Mapas: Recharts ou Apache ECharts (altamente customizáveis para manter o padrão minimalista) e Leaflet/React-Simple-Maps para geolocalização.
+
+Tabelas de Alta Performance: TanStack Table (React Table) em conjunto com a interface de tabela do shadcn/ui, garantindo ordenação, paginação e filtros complexos no cabeçalho.
+
+Personalidade Visual (Padrão Cloudflare): Tema predominantemente claro. Uso intensivo de tipografia para hierarquia (sem caixas coloridas desnecessárias). Bordas de 1px sólidas e cinzas (ex: border-slate-200). Elementos interativos respondem de forma rápida e seca, sem animações exageradas.
+
+2. Estrutura de Entidades e Dinâmica
+Escopo de Dados Macros (Top Bar): Controles que afetam todo o sistema simultaneamente, limitados a Período Base (ex: Mês atual) e Empresa/Filial. Exibe também o status da última atualização dos dados.
+
+1. Análises (Alta Densidade e Cross-Filtering Local):
+
+A tela atua como o próprio motor de filtros. O filtro de página atua isoladamente.
+
+Barra de Filtros Ativos: Tags visuais geradas pelo shadcn/ui mostrando o que está selecionado na tela atual.
+
+RFV: Gráfico de dispersão com clique interativo para selecionar clusters de clientes.
+
+Meta: Gráficos do tipo bullet ou em barra justaposta, focados no atingimento direto.
+
+Mapa: Navegação geoespacial atuando como gatilho de filtro regional para os demais gráficos.
+
+2. Cadastros (Bases Auxiliares):
+
+Módulo focado em DataTables interativas.
+
+Permite edição rápida, ordenação clicando nos cabeçalhos e busca instantânea. Modais limpos para inserção de novas metas, de-para ou agrupamentos.
+
+3. Configurações:
+
+Gestão de usuários e matriz de controle de acessos (RLS - Permissões por linha e por tela).
+
+Painel de monitoramento das atualizações automáticas, contendo logs das extrações e botão de acionamento manual de refresh do banco de dados.
+
+3. Estrutura de Pastas
+A arquitetura baseada em Feature-Sliced Design ou agrupamento por domínio isola as responsabilidades e facilita a escalabilidade do BI.
+
+TypeScript
+src/
+├── assets/
+├── components/
+│   ├── ui/
+│   └── shared/
+├── features/
+│   ├── analises/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   └── views/
+│   ├── cadastros/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   └── views/
+│   └── configuracoes/
+│       ├── components/
+│       ├── hooks/
+│       └── views/
+├── hooks/
+├── layouts/
+├── lib/
+├── routes/
+├── services/
+├── store/
+├── types/
+├── utils/
+├── App.tsx
+└── main.tsx
