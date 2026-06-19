@@ -4,6 +4,7 @@ import { DashboardLayout } from './layouts/DashboardLayout';
 import { AnalisesView } from './features/analises/views/AnalisesView';
 import { CadastrosView } from './features/cadastros/views/CadastrosView';
 import { ConfiguracoesView } from './features/configuracoes/views/ConfiguracoesView';
+import { SimuladoresView } from './features/simuladores/views/SimuladoresView';
 
 function DashboardContent() {
   const [currentTab, setCurrentTab] = useState('analises-overview');
@@ -12,6 +13,9 @@ function DashboardContent() {
     <DashboardLayout currentTab={currentTab} setCurrentTab={setCurrentTab}>
       {currentTab.startsWith('analises-') && (
         <AnalisesView activeTab={currentTab.replace('analises-', '')} />
+      )}
+      {currentTab.startsWith('simuladores-') && (
+        <SimuladoresView activeTab={currentTab.replace('simuladores-', '')} />
       )}
       {currentTab === 'cadastros' && <CadastrosView />}
       {currentTab === 'configuracoes' && <ConfiguracoesView />}

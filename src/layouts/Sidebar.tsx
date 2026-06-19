@@ -4,7 +4,8 @@ import {
   Settings, 
   ChevronDown, 
   ChevronRight, 
-  Eye
+  Eye,
+  Sliders
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -24,7 +25,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     analises: true,
     cadastros: true,
-    configuracoes: true
+    configuracoes: true,
+    simuladores: true
   });
 
   const toggleSection = (section: string) => {
@@ -35,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const isAnalisesActive = currentTab.startsWith('analises-');
+  const isSimuladoresActive = currentTab.startsWith('simuladores-');
 
   return (
     <aside 
@@ -47,8 +50,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center space-x-2.5 min-w-[200px]">
           {/* SVG Cloud Logo */}
           <div className="shrink-0">
-            <svg viewBox="0 0 24 24" className="w-7 h-7 text-orange-500 fill-orange-500">
-              <path d="M19.36 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.64-4.96z" />
+            <svg viewBox="0 0 24 24" className="w-7 h-7 text-blue-600 fill-none stroke-current" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              {/* Círculo/Nuvem principal */}
+              <path d="M 8.5 4.5 A 7.5 7.5 0 1 1 4.5 14.5" />
+              <path d="M 7.2 19 A 7.5 7.5 0 0 1 4.5 15.5" />
+              
+              {/* Nuvenzinha superior esquerda */}
+              <path d="M 5.5 6.5 A 2 2 0 0 0 2 8 A 2 2 0 0 0 4.5 10 A 1.8 1.8 0 0 0 5.5 9.8" fill="currentColor" fillOpacity="0.2" />
+              
+              {/* Nuvenzinha inferior direita */}
+              <path d="M 18.5 14 A 2 2 0 0 1 22 15.5 A 2 2 0 0 1 19.5 17.5 A 1.8 1.8 0 0 1 18.5 17.3" fill="currentColor" fillOpacity="0.2" />
+              
+              {/* Servidor (Rack de 3 unidades) */}
+              <rect x="8.5" y="7" width="7" height="2" rx="0.3" strokeWidth="1.5" />
+              <circle cx="10.25" cy="8" r="0.4" fill="currentColor" stroke="none" />
+              <circle cx="11.75" cy="8" r="0.4" fill="currentColor" stroke="none" />
+              
+              <rect x="8.5" y="10.5" width="7" height="2" rx="0.3" strokeWidth="1.5" />
+              <circle cx="10.25" cy="11.5" r="0.4" fill="currentColor" stroke="none" />
+              <circle cx="11.75" cy="11.5" r="0.4" fill="currentColor" stroke="none" />
+              
+              <rect x="8.5" y="14" width="7" height="2" rx="0.3" strokeWidth="1.5" />
+              <circle cx="10.25" cy="15" r="0.4" fill="currentColor" stroke="none" />
+              <circle cx="11.75" cy="15" r="0.4" fill="currentColor" stroke="none" />
+              
+              {/* Base de conexão de rede */}
+              <path d="M 12 16 v 3" />
+              <path d="M 9.5 19 h 5" />
+              <circle cx="12" cy="19" r="0.7" fill="currentColor" stroke="none" />
             </svg>
           </div>
           {!collapsed && (
@@ -97,7 +126,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   { id: 'analises-overview', label: 'Visão Geral' },
                   { id: 'analises-rfv', label: 'Análise RFV (Segmentos)' },
                   { id: 'analises-region', label: 'Análise Regional (UFs)' },
-                  { id: 'analises-performance', label: 'Metas & Desempenho' }
+                  { id: 'analises-performance', label: 'Metas & Desempenho' },
+                  { id: 'analises-mapa', label: 'Mapa de Vendas' }
                 ].map(item => {
                   const isActive = currentTab === item.id;
                   return (
@@ -163,7 +193,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* SECTION 3: AJUSTES */}
+        {/* SECTION 3: SIMULAÇÕES / SIMULATE */}
+        <div className="space-y-1">
+          {!collapsed && (
+            <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Simulate
+            </p>
+          )}
+
+          {/* Group 3: Simuladores */}
+          <div>
+            <button
+              onClick={() => !collapsed && toggleSection('simuladores')}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
+                isSimuladoresActive 
+                  ? 'text-slate-900 bg-slate-50/50' 
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Sliders className="w-4 h-4 text-slate-500 shrink-0" />
+                {!collapsed && <span>Simuladores</span>}
+              </div>
+              {!collapsed && (
+                openSections.simuladores ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              )}
+            </button>
+
+            {openSections.simuladores && !collapsed && (
+              <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
+                {[
+                  { id: 'simuladores-combos', label: 'Simulador de Combos' }
+                ].map(item => {
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setCurrentTab(item.id)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                        isActive 
+                          ? 'text-blue-600 font-bold bg-blue-50/40' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* SECTION 4: AJUSTES */}
         <div className="space-y-1">
           {!collapsed && (
             <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -171,7 +253,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </p>
           )}
 
-          {/* Group 3: Configurações */}
+          {/* Group 4: Configurações */}
           <div>
             <button
               onClick={() => !collapsed && toggleSection('configuracoes')}
