@@ -27,12 +27,41 @@
   }
 }
 
-/* Animations for simulated loading */
+/* Animations for simulated loading and transitions */
 @keyframes pulse-fast {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-pulse-fast {
   animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom interactive classes */
+.chart-clickable {
+  cursor: pointer;
+}
+.chart-clickable:hover {
+  filter: brightness(0.95);
+  transition: filter 0.15s ease;
+}
+
+/* Transition for layout */
+.fade-transition {
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }

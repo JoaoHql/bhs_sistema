@@ -6,11 +6,13 @@ import { CadastrosView } from './features/cadastros/views/CadastrosView';
 import { ConfiguracoesView } from './features/configuracoes/views/ConfiguracoesView';
 
 function DashboardContent() {
-  const [currentTab, setCurrentTab] = useState('analises');
+  const [currentTab, setCurrentTab] = useState('analises-overview');
 
   return (
     <DashboardLayout currentTab={currentTab} setCurrentTab={setCurrentTab}>
-      {currentTab === 'analises' && <AnalisesView />}
+      {currentTab.startsWith('analises-') && (
+        <AnalisesView activeTab={currentTab.replace('analises-', '')} />
+      )}
       {currentTab === 'cadastros' && <CadastrosView />}
       {currentTab === 'configuracoes' && <ConfiguracoesView />}
     </DashboardLayout>
