@@ -21,9 +21,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   collapsed,
   setCollapsed
 }) => {
-  // Collapsible sections state
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     analises: true,
+    financeiro: false,
     cadastros: true,
     configuracoes: true,
     simuladores: true
@@ -100,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </p>
           )}
 
-          {/* Group 1: Análise */}
+          {/* Group 1: Gestão */}
           <div>
             <button
               onClick={() => !collapsed && toggleSection('analises')}
@@ -112,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="flex items-center space-x-2.5">
                 <Eye className="w-4 h-4 text-slate-500 shrink-0" />
-                {!collapsed && <span>Análises (BI)</span>}
+                {!collapsed && <span>Gestão (BI)</span>}
               </div>
               {!collapsed && (
                 openSections.analises ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -128,6 +128,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   { id: 'analises-region', label: 'Análise Regional (UFs)' },
                   { id: 'analises-performance', label: 'Metas & Desempenho' },
                   { id: 'analises-mapa', label: 'Mapa de Vendas' }
+                ].map(item => {
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setCurrentTab(item.id)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                        isActive 
+                          ? 'text-blue-600 font-bold bg-blue-50/40' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Group 1.5: Financeiro */}
+          <div>
+            <button
+              onClick={() => !collapsed && toggleSection('financeiro')}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
+                currentTab.startsWith('financeiro-') 
+                  ? 'text-slate-900 bg-slate-50/50' 
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Database className="w-4 h-4 text-slate-500 shrink-0" />
+                {!collapsed && <span>Financeiro (BI)</span>}
+              </div>
+              {!collapsed && (
+                openSections.financeiro ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              )}
+            </button>
+
+            {openSections.financeiro && !collapsed && (
+              <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
+                {[
+                  { id: 'financeiro-pagar', label: 'Contas a Pagar' },
+                  { id: 'financeiro-receber', label: 'Contas a Receber' },
+                  { id: 'financeiro-conciliacao', label: 'Conciliação Bancária' }
                 ].map(item => {
                   const isActive = currentTab === item.id;
                   return (

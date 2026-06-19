@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 
 export const PerformanceTab: React.FC = () => {
-  const { filteredMetas, branch, setBranch } = useDashboard();
+  const { filteredMetas, setBranch } = useDashboard();
 
   // 1. General Metrics
   const summary = useMemo(() => {
@@ -24,23 +24,25 @@ export const PerformanceTab: React.FC = () => {
     };
   }, [filteredMetas]);
 
-  // 2. Atingimento por Filial (Bullet Chart data)
-  const branchData = useMemo(() => {
-    const branchesMap: Record<string, { target: number; actual: number }> = {};
+  // 2. Atingimento por Empresa (Bullet Chart data)
+  const empresaData = useMemo(() => {
+    const empresasMap: Record<string, { target: number; actual: number }> = {};
     filteredMetas.forEach(m => {
-      if (!branchesMap[m.branch]) {
-        branchesMap[m.branch] = { target: 0, actual: 0 };
+      // Usar 'empresa' no lugar de 'branch' para o agrupamento, mas lembre-se que filteredMetas já está filtrado pela Filial global.
+      const emp = m.empresa || 'Empresa Padrão';
+      if (!empresasMap[emp]) {
+        empresasMap[emp] = { target: 0, actual: 0 };
       }
-      branchesMap[m.branch].target += m.target;
-      branchesMap[m.branch].actual += m.actual;
+      empresasMap[emp].target += m.target;
+      empresasMap[emp].actual += m.actual;
     });
 
-    return Object.entries(branchesMap).map(([name, val]) => ({
+    return Object.entries(empresasMap).map(([name, val]) => ({
       name,
       Realizado: val.actual,
       Meta: val.target,
       percentual: Math.round(val.target > 0 ? (val.actual / val.target) * 100 : 0)
-    }));
+    })).sort((a, b) => b.percentual - a.percentual);
   }, [filteredMetas]);
 
   // 3. Gauge Data for general target progress
@@ -96,6 +98,26 @@ export const PerformanceTab: React.FC = () => {
       { name: 'Jun', LTV: Math.round(21000 * scale), CAC: Math.round(2600 * scale) },
     ];
   }, [summary]);
+
+  // 7. Atingimento por Vendedor
+  const vendedorData = useMemo(() => {
+    const vendedoresMap: Record<string, { target: number; actual: number }> = {};
+    filteredMetas.forEach(m => {
+      const vend = m.vendedor || 'Vendedor Não Atribuído';
+      if (!vendedoresMap[vend]) {
+        vendedoresMap[vend] = { target: 0, actual: 0 };
+      }
+      vendedoresMap[vend].target += m.target;
+      vendedoresMap[vend].actual += m.actual;
+    });
+
+    return Object.entries(vendedoresMap).map(([name, val]) => ({
+      name,
+      Realizado: val.actual,
+      Meta: val.target,
+      percentual: Math.round(val.target > 0 ? (val.actual / val.target) * 100 : 0)
+    })).sort((a, b) => b.percentual - a.percentual);
+  }, [filteredMetas]);
 
   const formatBRL = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
@@ -197,7 +219,7 @@ export const PerformanceTab: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip content={(props) => renderPerformanceTooltip(props, 'waterfall')} />
+                <Tooltip content={(props: any) => renderPerformanceTooltip(props, 'waterfall')} />
                 {/* Transparent base bar to elevate the floating bars */}
                 <Bar dataKey="min" stackId="a" fill="transparent" />
                 <Bar dataKey="delta" stackId="a" radius={[4, 4, 0, 0]} isAnimationActive={true} animationDuration={800}>
@@ -213,21 +235,20 @@ export const PerformanceTab: React.FC = () => {
 
       {/* Middle Grid: Branch Atingimento & Forecast */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Visual 3: Atingimento por Filial (Bullet) */}
+        {/* Visual 3: Atingimento por Empresa (Bullet) */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col h-[360px]">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">Atingimento de Meta por Filial</h3>
-          <p className="text-xs text-slate-400 mb-4">Realizado vs Meta por filial. Clique na barra para filtrar.</p>
+          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">Atingimento de Meta por Empresa</h3>
+          <p className="text-xs text-slate-400 mb-4">Realizado vs Meta agrupado por empresa (filtrado por filial ativa).</p>
           <div className="flex-grow min-h-0 space-y-5 overflow-y-auto pr-1">
-            {branchData.map(item => {
-              const isSelected = branch === item.name;
+            {empresaData.map(item => {
+              // const isSelected = branch === item.name; // Could filter by empresa if desired, but we keep branch filter logic global.
               return (
                 <div 
                   key={item.name} 
-                  onClick={() => setBranch(isSelected ? 'All' : item.name)}
-                  className={`space-y-1.5 p-2 rounded-lg cursor-pointer transition-colors hover:bg-slate-50 ${isSelected ? 'bg-orange-50/50 border border-orange-200' : ''}`}
+                  className={`space-y-1.5 p-2 rounded-lg transition-colors hover:bg-slate-50`}
                 >
                   <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
-                    <span className={isSelected ? 'text-orange-600 font-bold' : ''}>{item.name}</span>
+                    <span>{item.name}</span>
                     <span>{formatBRL(item.Realizado)} / {formatBRL(item.Meta)} ({item.percentual}%)</span>
                   </div>
                   <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200 relative">
@@ -261,7 +282,7 @@ export const PerformanceTab: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip content={(props) => renderPerformanceTooltip(props, 'forecast')} />
+                <Tooltip content={(props: any) => renderPerformanceTooltip(props, 'forecast')} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
                 <Line type="monotone" dataKey="Realizado" name="Faturamento Real" stroke="#f97316" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={true} />
                 <Line type="monotone" dataKey="Projeção" name="Projeção de Metas" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} isAnimationActive={true} />
@@ -286,7 +307,7 @@ export const PerformanceTab: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip content={(props) => renderPerformanceTooltip(props, 'ltv')} />
+                <Tooltip content={(props: any) => renderPerformanceTooltip(props, 'ltv')} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
                 <Area type="monotone" dataKey="LTV" name="LTV Médio" stroke="#10b981" fill="#10b981" fillOpacity={0.15} strokeWidth={2} isAnimationActive={true} />
                 <Area type="monotone" dataKey="CAC" name="CAC Médio" stroke="#ef4444" fill="#ef4444" fillOpacity={0.05} strokeWidth={1.5} isAnimationActive={true} />
@@ -295,44 +316,39 @@ export const PerformanceTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Visual 6: Detailed Goals Table */}
+        {/* Visual 6: Detailed Goals Table (Metas por Vendedor) */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col h-[360px] lg:col-span-2">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">Detalhamento de Metas</h3>
-          <p className="text-xs text-slate-400 mb-3">Tabela de acompanhamento. Clique na linha para filtrar por filial.</p>
-          <div className="flex-grow overflow-y-auto">
+          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">Desempenho por Vendedor</h3>
+          <p className="text-xs text-slate-400 mb-3">Tabela de acompanhamento de vendas (filtrada pela filial global).</p>
+          <div className="flex-grow overflow-y-auto pr-2">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
+              <thead className="bg-white sticky top-0 z-10">
                 <tr className="border-b border-slate-100 text-slate-400 font-bold select-none">
-                  <th className="py-2.5">Categoria</th>
-                  <th className="py-2.5">Filial</th>
+                  <th className="py-2.5">Vendedor</th>
                   <th className="py-2.5 text-right">Meta</th>
                   <th className="py-2.5 text-right">Realizado</th>
                   <th className="py-2.5 text-right">% Atingido</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredMetas.map(meta => {
-                  const pct = meta.target > 0 ? (meta.actual / meta.target) * 100 : 0;
-                  const isSelected = branch === meta.branch;
+                {vendedorData.map((vend, i) => {
                   return (
                     <tr 
-                      key={meta.id} 
-                      onClick={() => setBranch(isSelected ? 'All' : meta.branch)}
-                      className={`border-b border-slate-100 hover:bg-slate-50/70 text-slate-700 font-medium cursor-pointer transition-colors ${isSelected ? 'bg-orange-50 hover:bg-orange-100/60 font-bold' : ''}`}
+                      key={i} 
+                      className={`border-b border-slate-100 hover:bg-slate-50/70 text-slate-700 font-medium transition-colors`}
                     >
-                      <td className="py-3 font-semibold text-slate-900">{meta.category}</td>
-                      <td className="py-3 text-slate-500">{meta.branch}</td>
-                      <td className="py-3 text-right">{formatBRL(meta.target)}</td>
-                      <td className="py-3 text-right">{formatBRL(meta.actual)}</td>
+                      <td className="py-3 font-semibold text-slate-900">{vend.name}</td>
+                      <td className="py-3 text-right">{formatBRL(vend.Meta)}</td>
+                      <td className="py-3 text-right">{formatBRL(vend.Realizado)}</td>
                       <td className="py-3 text-right">
                         <div className="flex items-center justify-end space-x-2">
-                          <span className={`font-bold ${pct >= 100 ? 'text-emerald-600' : pct >= 80 ? 'text-orange-600' : 'text-red-600'}`}>
-                            {pct.toFixed(0)}%
+                          <span className={`font-bold ${vend.percentual >= 100 ? 'text-emerald-600' : vend.percentual >= 80 ? 'text-orange-600' : 'text-red-600'}`}>
+                            {vend.percentual.toFixed(0)}%
                           </span>
                           <div className="w-12 h-1.5 bg-slate-100 border border-slate-200 rounded-full overflow-hidden shrink-0">
                             <div 
-                              className={`h-full rounded-full ${pct >= 100 ? 'bg-emerald-500' : pct >= 80 ? 'bg-orange-500' : 'bg-red-500'}`}
-                              style={{ width: `${Math.min(100, pct)}%` }}
+                              className={`h-full rounded-full ${vend.percentual >= 100 ? 'bg-emerald-500' : vend.percentual >= 80 ? 'bg-orange-500' : 'bg-red-500'}`}
+                              style={{ width: `${Math.min(100, vend.percentual)}%` }}
                             ></div>
                           </div>
                         </div>

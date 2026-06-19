@@ -132,16 +132,16 @@ export const generateCustomers = (): Customer[] => {
 
 // Initial Metas (Targets)
 export const initialMetas: Meta[] = [
-  { id: 'MET-001', category: 'Software Licenças', branch: 'Filial Sul', target: 500000, actual: 480000, period: 'Jun/2026' },
-  { id: 'MET-002', category: 'Consultoria Integrada', branch: 'Filial Sul', target: 200000, actual: 215000, period: 'Jun/2026' },
-  { id: 'MET-003', category: 'Suporte & SLA', branch: 'Filial Sul', target: 150000, actual: 120000, period: 'Jun/2026' },
-  { id: 'MET-004', category: 'Software Licenças', branch: 'Filial Sudeste', target: 1200000, actual: 1150000, period: 'Jun/2026' },
-  { id: 'MET-005', category: 'Consultoria Integrada', branch: 'Filial Sudeste', target: 450000, actual: 390000, period: 'Jun/2026' },
-  { id: 'MET-006', category: 'Suporte & SLA', branch: 'Filial Sudeste', target: 300000, actual: 310000, period: 'Jun/2026' },
-  { id: 'MET-007', category: 'Hardware Infrainstr.', branch: 'Filial Sudeste', target: 600000, actual: 520000, period: 'Jun/2026' },
-  { id: 'MET-008', category: 'Software Licenças', branch: 'Filial Nordeste', target: 400000, actual: 410000, period: 'Jun/2026' },
-  { id: 'MET-009', category: 'Consultoria Integrada', branch: 'Filial Nordeste', target: 150000, actual: 110000, period: 'Jun/2026' },
-  { id: 'MET-010', category: 'Suporte & SLA', branch: 'Filial Nordeste', target: 100000, actual: 95000, period: 'Jun/2026' },
+  { id: 'MET-001', category: 'Software Licenças', branch: 'Filial Sul', vendedor: 'Amanda Souza', empresa: 'Tech Solutions', target: 500000, actual: 480000, period: 'Jun/2026' },
+  { id: 'MET-002', category: 'Consultoria Integrada', branch: 'Filial Sul', vendedor: 'Carlos Oliveira', empresa: 'Beta Sistemas', target: 200000, actual: 215000, period: 'Jun/2026' },
+  { id: 'MET-003', category: 'Suporte & SLA', branch: 'Filial Sul', vendedor: 'Amanda Souza', empresa: 'Nova Indústria', target: 150000, actual: 120000, period: 'Jun/2026' },
+  { id: 'MET-004', category: 'Software Licenças', branch: 'Filial Sudeste', vendedor: 'Roberto Alves', empresa: 'Alpha Consultoria', target: 1200000, actual: 1150000, period: 'Jun/2026' },
+  { id: 'MET-005', category: 'Consultoria Integrada', branch: 'Filial Sudeste', vendedor: 'Roberto Alves', empresa: 'Omega Varejo', target: 450000, actual: 390000, period: 'Jun/2026' },
+  { id: 'MET-006', category: 'Suporte & SLA', branch: 'Filial Sudeste', vendedor: 'Mariana Costa', empresa: 'Delta Logística', target: 300000, actual: 310000, period: 'Jun/2026' },
+  { id: 'MET-007', category: 'Hardware Infrainstr.', branch: 'Filial Sudeste', vendedor: 'Mariana Costa', empresa: 'Prime Distribuidora', target: 600000, actual: 520000, period: 'Jun/2026' },
+  { id: 'MET-008', category: 'Software Licenças', branch: 'Filial Nordeste', vendedor: 'Fernanda Lima', empresa: 'Zeta Serviços', target: 400000, actual: 410000, period: 'Jun/2026' },
+  { id: 'MET-009', category: 'Consultoria Integrada', branch: 'Filial Nordeste', vendedor: 'João Pedro', empresa: 'Infinity Tech', target: 150000, actual: 110000, period: 'Jun/2026' },
+  { id: 'MET-010', category: 'Suporte & SLA', branch: 'Filial Nordeste', vendedor: 'Fernanda Lima', empresa: 'Nexus Corp', target: 100000, actual: 95000, period: 'Jun/2026' },
 ];
 
 // Initial Users configuration

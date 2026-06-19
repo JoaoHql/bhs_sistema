@@ -14,6 +14,8 @@ export interface Meta {
   id: string;
   category: string;
   branch: string; // Branch name (e.g. Filial SP, Filial RJ)
+  vendedor?: string;
+  empresa?: string;
   target: number; // Target monetary value
   actual: number; // Actual monetary value achieved
   period: string; // Month/Year (e.g. "Jun/2026")
