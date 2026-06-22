@@ -5,8 +5,8 @@ import { AnalisesView } from './features/analises/views/AnalisesView';
 import { CadastrosView } from './features/cadastros/views/CadastrosView';
 import { ConfiguracoesView } from './features/configuracoes/views/ConfiguracoesView';
 import { SimuladoresView } from './features/simuladores/views/SimuladoresView';
-
 import { FinanceiroView } from './features/financeiro/views/FinanceiroView';
+import { AgenteView } from './features/agente/views/AgenteView';
 
 function DashboardContent() {
   const [currentTab, setCurrentTab] = useState('analises-overview');
@@ -22,6 +22,7 @@ function DashboardContent() {
       {currentTab.startsWith('simuladores-') && (
         <SimuladoresView activeTab={currentTab.replace('simuladores-', '')} />
       )}
+      {currentTab === 'agente' && <AgenteView />}
       {currentTab === 'cadastros' && <CadastrosView />}
       {currentTab === 'configuracoes' && <ConfiguracoesView />}
     </DashboardLayout>

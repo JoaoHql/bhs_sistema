@@ -5,7 +5,8 @@ import {
   ChevronDown, 
   ChevronRight, 
   Eye,
-  Sliders
+  Sliders,
+  Bot
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -23,7 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     analises: true,
-    financeiro: false,
+    financeiro: true,
     cadastros: true,
     configuracoes: true,
     simuladores: true
@@ -195,51 +196,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* SECTION 2: CADASTROS / BUILD */}
+        {/* SECTION: COGNITIVO / AGENTE */}
         <div className="space-y-1">
           {!collapsed && (
             <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Build
+              Cognitivo
             </p>
           )}
 
-          {/* Group 2: Cadastros */}
           <div>
             <button
-              onClick={() => !collapsed && toggleSection('cadastros')}
+              onClick={() => setCurrentTab('agente')}
               className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
-                currentTab === 'cadastros' 
-                  ? 'text-slate-900 bg-slate-50/50' 
+                currentTab === 'agente' 
+                  ? 'text-blue-600 bg-blue-50/40 font-bold' 
                   : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <Database className="w-4 h-4 text-slate-500 shrink-0" />
-                {!collapsed && <span>Base de Dados</span>}
+                <Bot className={`w-4 h-4 shrink-0 ${currentTab === 'agente' ? 'text-blue-600' : 'text-slate-500'}`} />
+                {!collapsed && <span>Agente de Decisão</span>}
               </div>
-              {!collapsed && (
-                openSections.cadastros ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              )}
             </button>
-
-            {openSections.cadastros && !collapsed && (
-              <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
-                <button
-                  onClick={() => setCurrentTab('cadastros')}
-                  className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
-                    currentTab === 'cadastros' 
-                      ? 'text-blue-600 font-bold bg-blue-50/40' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
-                  }`}
-                >
-                  Registros Gerais
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* SECTION 3: SIMULAÇÕES / SIMULATE */}
+        {/* SECTION 2: SIMULAÇÕES / SIMULATE */}
         <div className="space-y-1">
           {!collapsed && (
             <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -286,6 +268,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* SECTION 3: CADASTROS / BUILD */}
+        <div className="space-y-1">
+          {!collapsed && (
+            <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Build
+            </p>
+          )}
+
+          {/* Group 2: Cadastros */}
+          <div>
+            <button
+              onClick={() => !collapsed && toggleSection('cadastros')}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
+                currentTab === 'cadastros' 
+                  ? 'text-slate-900 bg-slate-50/50' 
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Database className="w-4 h-4 text-slate-500 shrink-0" />
+                {!collapsed && <span>Base de Dados</span>}
+              </div>
+              {!collapsed && (
+                openSections.cadastros ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              )}
+            </button>
+
+            {openSections.cadastros && !collapsed && (
+              <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
+                <button
+                  onClick={() => setCurrentTab('cadastros')}
+                  className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                    currentTab === 'cadastros' 
+                      ? 'text-blue-600 font-bold bg-blue-50/40' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
+                  }`}
+                >
+                  Registros Gerais
+                </button>
               </div>
             )}
           </div>
