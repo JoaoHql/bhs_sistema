@@ -172,7 +172,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {[
                   { id: 'financeiro-pagar', label: 'Contas a Pagar' },
                   { id: 'financeiro-receber', label: 'Contas a Receber' },
-                  { id: 'financeiro-conciliacao', label: 'Conciliação Bancária' }
+                  { id: 'financeiro-conciliacao', label: 'Conciliação Bancária' },
+                  { id: 'financeiro-dre', label: 'DRE Gerencial' }
                 ].map(item => {
                   const isActive = currentTab === item.id;
                   return (

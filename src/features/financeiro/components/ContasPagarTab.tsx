@@ -5,6 +5,7 @@ import {
   Legend, Cell, ComposedChart, Line, AreaChart, Area, PieChart, Pie
 } from 'recharts';
 import { ArrowDownRight, Clock, AlertTriangle, TrendingDown, CalendarClock, FileWarning, Landmark } from 'lucide-react';
+import { VisualFiltersBar, type VisualFilter } from './VisualFiltersBar';
 
 export const ContasPagarTab: React.FC = () => {
   const { branch } = useDashboard();
@@ -107,8 +108,24 @@ export const ContasPagarTab: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
   };
 
+  const visualFilters: VisualFilter[] = [
+    ...(activeAging !== 'Todos'
+      ? [{ key: 'aging', label: 'Aging', value: activeAging, tone: 'orange' as const, onClear: () => setActiveAging('Todos') }]
+      : []),
+    ...(activeCostCenter !== 'Todos'
+      ? [{ key: 'cost-center', label: 'Centro de custo', value: activeCostCenter, tone: 'blue' as const, onClear: () => setActiveCostCenter('Todos') }]
+      : []),
+  ];
+
+  const clearVisualFilters = () => {
+    setActiveAging('Todos');
+    setActiveCostCenter('Todos');
+  };
+
   return (
     <div className="space-y-4 pb-8">
+      <VisualFiltersBar filters={visualFilters} onClearAll={clearVisualFilters} />
+
       {/* Top KPI Cards - Alta Densidade */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
         <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex items-center justify-between">
@@ -278,17 +295,6 @@ export const ContasPagarTab: React.FC = () => {
             <p className="text-[11px] text-slate-400">Listagem completa de títulos a pagar</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {(activeAging !== 'Todos' || activeCostCenter !== 'Todos') && (
-              <button
-                onClick={() => {
-                  setActiveAging('Todos');
-                  setActiveCostCenter('Todos');
-                }}
-                className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-extrabold uppercase text-slate-500 hover:bg-slate-50 cursor-pointer"
-              >
-                Limpar filtros visuais
-              </button>
-            )}
             {paymentQueue.map(item => {
               const Icon = item.icon;
 

@@ -5,6 +5,7 @@ import {
   Legend, Cell, PieChart, Pie, AreaChart, Area
 } from 'recharts';
 import { Landmark, CheckCircle2, AlertTriangle, Clock, ArrowRightLeft, RefreshCw, PlugZap } from 'lucide-react';
+import { VisualFiltersBar, type VisualFilter } from './VisualFiltersBar';
 
 const bankProfiles = [
   { name: 'Banco Inter', shortName: 'Inter', mark: 'i', color: '#ff7a00', bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', gradient: 'from-orange-500 to-amber-400', account: 'Conta movimento' },
@@ -195,8 +196,24 @@ export const ConciliacaoBancariaTab: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
   };
 
+  const visualFilters: VisualFilter[] = [
+    ...(activeBank !== 'Todos'
+      ? [{ key: 'bank', label: 'Banco', value: activeBank, tone: 'blue' as const, onClear: () => setActiveBank('Todos') }]
+      : []),
+    ...(activeDate !== 'Todos'
+      ? [{ key: 'date', label: 'Data', value: activeDate, tone: 'amber' as const, onClear: () => setActiveDate('Todos') }]
+      : []),
+  ];
+
+  const clearVisualFilters = () => {
+    setActiveBank('Todos');
+    setActiveDate('Todos');
+  };
+
   return (
     <div className="space-y-4 pb-8">
+      <VisualFiltersBar filters={visualFilters} onClearAll={clearVisualFilters} />
+
       {/* Top KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
         {/* KPI 1: Saldo Consolidado */}
@@ -375,17 +392,6 @@ export const ConciliacaoBancariaTab: React.FC = () => {
             <p className="text-[11px] text-slate-400">Extratos filtrados por instituição: {activeBank} {activeDate !== 'Todos' ? `• ${activeDate}` : ''}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {(activeBank !== 'Todos' || activeDate !== 'Todos') && (
-              <button
-                onClick={() => {
-                  setActiveBank('Todos');
-                  setActiveDate('Todos');
-                }}
-                className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-extrabold uppercase text-slate-500 hover:bg-slate-50 cursor-pointer"
-              >
-                Limpar filtros visuais
-              </button>
-            )}
             <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
               <button
                 onClick={() => setActiveBank('Todos')}
