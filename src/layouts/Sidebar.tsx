@@ -48,43 +48,89 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       {/* Header / Cloudflare Orange Cloud Logo */}
       <div className="h-16 flex items-center px-4 border-b border-slate-100 overflow-hidden">
-        <div className="flex items-center space-x-2.5 min-w-[200px]">
-          {/* SVG Cloud Logo */}
-          <div className="shrink-0">
-            <svg viewBox="0 0 24 24" className="w-7 h-7 text-blue-600 fill-none stroke-current" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              {/* Círculo/Nuvem principal */}
-              <path d="M 8.5 4.5 A 7.5 7.5 0 1 1 4.5 14.5" />
-              <path d="M 7.2 19 A 7.5 7.5 0 0 1 4.5 15.5" />
+        <div className="flex items-center min-w-[200px]">
+          {/* Logo BHS Inteligente SVG */}
+          <div className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200/60 shadow-sm relative group overflow-hidden">
+            {/* Efeito sutil de background hover glow */}
+            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <svg 
+              viewBox="0 0 24 24" 
+              className="h-6.5 w-6.5 transition-all duration-300 group-hover:scale-110" 
+              strokeWidth="1.6" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <defs>
+                {/* Gradiente principal da Nuvem */}
+                <linearGradient id="bhsCloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#0ea5e9" /> {/* sky-500 */}
+                  <stop offset="50%" stopColor="#0d9488" /> {/* teal-600 */}
+                  <stop offset="100%" stopColor="#0f766e" /> {/* teal-700 */}
+                </linearGradient>
+                {/* Gradiente dos Racks de Servidor */}
+                <linearGradient id="bhsServerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#0f172a" />
+                  <stop offset="100%" stopColor="#334155" />
+                </linearGradient>
+              </defs>
+              
+              {/* Nuvem principal (estilizada com gradiente) */}
+              <path 
+                d="M 8.5 4.5 A 7.5 7.5 0 1 1 4.5 14.5" 
+                stroke="url(#bhsCloudGrad)" 
+                fill="url(#bhsCloudGrad)" 
+                fillOpacity="0.06" 
+              />
+              <path 
+                d="M 7.2 19 A 7.5 7.5 0 0 1 4.5 15.5" 
+                stroke="url(#bhsCloudGrad)" 
+                fill="none" 
+              />
               
               {/* Nuvenzinha superior esquerda */}
-              <path d="M 5.5 6.5 A 2 2 0 0 0 2 8 A 2 2 0 0 0 4.5 10 A 1.8 1.8 0 0 0 5.5 9.8" fill="currentColor" fillOpacity="0.2" />
+              <path 
+                d="M 5.5 6.5 A 2 2 0 0 0 2 8 A 2 2 0 0 0 4.5 10 A 1.8 1.8 0 0 0 5.5 9.8" 
+                fill="url(#bhsCloudGrad)" 
+                fillOpacity="0.18" 
+              />
               
               {/* Nuvenzinha inferior direita */}
-              <path d="M 18.5 14 A 2 2 0 0 1 22 15.5 A 2 2 0 0 1 19.5 17.5 A 1.8 1.8 0 0 1 18.5 17.3" fill="currentColor" fillOpacity="0.2" />
+              <path 
+                d="M 18.5 14 A 2 2 0 0 1 22 15.5 A 2 2 0 0 1 19.5 17.5 A 1.8 1.8 0 0 1 18.5 17.3" 
+                fill="url(#bhsCloudGrad)" 
+                fillOpacity="0.18" 
+              />
               
-              {/* Servidor (Rack de 3 unidades) */}
-              <rect x="8.5" y="7" width="7" height="2" rx="0.3" strokeWidth="1.5" />
-              <circle cx="10.25" cy="8" r="0.4" fill="currentColor" stroke="none" />
-              <circle cx="11.75" cy="8" r="0.4" fill="currentColor" stroke="none" />
+              {/* Racks de Servidor (com LEDs vivos) */}
+              {/* Servidor 1 */}
+              <rect x="8.5" y="7.2" width="7" height="1.8" rx="0.4" fill="url(#bhsServerGrad)" stroke="url(#bhsCloudGrad)" strokeWidth="0.5" />
+              <circle cx="10.2" cy="8.1" r="0.45" fill="#10b981" /> {/* LED Verde Operacional */}
+              <circle cx="11.7" cy="8.1" r="0.45" fill="#10b981" /> {/* LED Verde Operacional */}
               
-              <rect x="8.5" y="10.5" width="7" height="2" rx="0.3" strokeWidth="1.5" />
-              <circle cx="10.25" cy="11.5" r="0.4" fill="currentColor" stroke="none" />
-              <circle cx="11.75" cy="11.5" r="0.4" fill="currentColor" stroke="none" />
+              {/* Servidor 2 */}
+              <rect x="8.5" y="10.2" width="7" height="1.8" rx="0.4" fill="url(#bhsServerGrad)" stroke="url(#bhsCloudGrad)" strokeWidth="0.5" />
+              <circle cx="10.2" cy="11.1" r="0.45" fill="#10b981" />
+              <circle cx="11.7" cy="11.1" r="0.45" fill="#f59e0b" className="animate-pulse" /> {/* LED Laranja atividade */}
               
-              <rect x="8.5" y="14" width="7" height="2" rx="0.3" strokeWidth="1.5" />
-              <circle cx="10.25" cy="15" r="0.4" fill="currentColor" stroke="none" />
-              <circle cx="11.75" cy="15" r="0.4" fill="currentColor" stroke="none" />
+              {/* Servidor 3 */}
+              <rect x="8.5" y="13.2" width="7" height="1.8" rx="0.4" fill="url(#bhsServerGrad)" stroke="url(#bhsCloudGrad)" strokeWidth="0.5" />
+              <circle cx="10.2" cy="14.1" r="0.45" fill="#10b981" />
+              <circle cx="11.7" cy="14.1" r="0.45" fill="#10b981" />
               
-              {/* Base de conexão de rede */}
-              <path d="M 12 16 v 3" />
-              <path d="M 9.5 19 h 5" />
-              <circle cx="12" cy="19" r="0.7" fill="currentColor" stroke="none" />
+              {/* Conexões de Rede base */}
+              <path d="M 12 15 v 4" stroke="url(#bhsCloudGrad)" strokeWidth="1" />
+              <path d="M 9.5 19 h 5" stroke="url(#bhsCloudGrad)" strokeWidth="1" />
+              <circle cx="12" cy="19" r="0.75" fill="#0d9488" />
             </svg>
           </div>
           {!collapsed && (
-            <div className="flex flex-col">
-              <span className="font-bold text-slate-800 text-sm tracking-tight leading-none">BHS Soluções</span>
-              <span className="text-[10px] text-slate-400 font-semibold truncate mt-1">contato@bhs.com.br</span>
+            <div className="ml-2.5 flex flex-col min-w-0">
+              <span className="font-extrabold text-slate-800 text-sm tracking-tight leading-none bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                BHS Soluções
+              </span>
+              <span className="text-[10px] text-slate-400 font-bold truncate mt-1 tracking-wide">
+                contato@bhs.com.br
+              </span>
             </div>
           )}
         </div>
