@@ -7,7 +7,8 @@ import {
   Eye,
   Megaphone,
   Sliders,
-  Bot
+  Bot,
+  ShoppingBag
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,6 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     analises: true,
+    marketplaces: true,
     financeiro: true,
     ads: true,
     cadastros: true,
@@ -39,7 +41,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }));
   };
 
-  const isAnalisesActive = currentTab.startsWith('analises-');
+  const isMarketplaceActive = ['analises-shopee', 'analises-mercadolivre', 'analises-ifood'].includes(currentTab);
+  const isAnalisesActive = currentTab.startsWith('analises-') && !isMarketplaceActive;
   const isAdsActive = currentTab.startsWith('ads-');
   const isSimuladoresActive = currentTab.startsWith('simuladores-');
 
@@ -169,7 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </button>
 
-            {/* Sub-items under vertical line */}
+             {/* Sub-items under vertical line */}
             {openSections.analises && !collapsed && (
               <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
                 {[
@@ -178,6 +181,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   { id: 'analises-region', label: 'Análise Regional (UFs)' },
                   { id: 'analises-performance', label: 'Metas & Desempenho' },
                   { id: 'analises-mapa', label: 'Mapa de Vendas' }
+                ].map(item => {
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setCurrentTab(item.id)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                        isActive 
+                          ? 'text-blue-600 font-bold bg-blue-50/40' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Group 1.2: Marketplaces */}
+          <div>
+            <button
+              onClick={() => !collapsed && toggleSection('marketplaces')}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
+                isMarketplaceActive 
+                  ? 'text-slate-900 bg-slate-50/50' 
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <ShoppingBag className="w-4 h-4 text-slate-500 shrink-0" />
+                {!collapsed && <span>Marketplaces</span>}
+              </div>
+              {!collapsed && (
+                openSections.marketplaces ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              )}
+            </button>
+
+            {/* Sub-items under vertical line */}
+            {openSections.marketplaces && !collapsed && (
+              <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
+                {[
+                  { id: 'analises-shopee', label: 'Shopee' },
+                  { id: 'analises-mercadolivre', label: 'Mercado Livre' },
+                  { id: 'analises-ifood', label: 'iFood' }
                 ].map(item => {
                   const isActive = currentTab === item.id;
                   return (
