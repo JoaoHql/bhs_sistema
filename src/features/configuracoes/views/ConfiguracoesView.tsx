@@ -5,6 +5,10 @@ import { Shield, RefreshCw, Clock, CheckCircle2, XCircle, AlertTriangle } from '
 
 export const ConfiguracoesView: React.FC = () => {
   const { 
+    dataMode,
+    setDataMode,
+    dataStatus,
+    dataStatusMessage,
     users, 
     syncLogs, 
     isSyncing, 
@@ -132,6 +136,34 @@ export const ConfiguracoesView: React.FC = () => {
                 <h3 className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Carga de Banco</h3>
                 <p className="text-[10px] text-slate-400">Monitor de ETL e conexões</p>
               </div>
+            </div>
+          </div>
+
+          <div className="p-4 border-b border-slate-100 bg-white space-y-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Origem de Dados</span>
+                <span className="text-xs font-semibold text-slate-700">Troca imediata com persistência local</span>
+              </div>
+              <select
+                value={dataMode}
+                onChange={(e) => setDataMode(e.target.value as 'mock' | 'api')}
+                className="bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 px-2.5 py-1.5 focus:outline-none focus:border-orange-500"
+              >
+                <option value="mock">Mock</option>
+                <option value="api">API</option>
+              </select>
+            </div>
+            <div className={`rounded border px-3 py-2 text-[10px] font-bold uppercase tracking-wide ${
+              dataStatus === 'error'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : dataStatus === 'fallback'
+                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                : dataStatus === 'loading'
+                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}>
+              {dataMode} · {dataStatus} · {dataStatusMessage}
             </div>
           </div>
 

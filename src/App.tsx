@@ -7,6 +7,7 @@ import { ConfiguracoesView } from './features/configuracoes/views/ConfiguracoesV
 import { SimuladoresView } from './features/simuladores/views/SimuladoresView';
 import { FinanceiroView } from './features/financeiro/views/FinanceiroView';
 import { AgenteView } from './features/agente/views/AgenteView';
+import { AdsView } from './features/ads/views/AdsView';
 
 function DashboardContent() {
   const [currentTab, setCurrentTab] = useState('analises-overview');
@@ -18,6 +19,9 @@ function DashboardContent() {
       )}
       {currentTab.startsWith('financeiro-') && (
         <FinanceiroView activeTab={currentTab.replace('financeiro-', '')} />
+      )}
+      {currentTab.startsWith('ads-') && (
+        <AdsView activeTab={currentTab.replace('ads-', '')} />
       )}
       {currentTab.startsWith('simuladores-') && (
         <SimuladoresView activeTab={currentTab.replace('simuladores-', '')} />

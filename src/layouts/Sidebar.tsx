@@ -5,6 +5,7 @@ import {
   ChevronDown, 
   ChevronRight, 
   Eye,
+  Megaphone,
   Sliders,
   Bot
 } from 'lucide-react';
@@ -25,6 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     analises: true,
     financeiro: true,
+    ads: true,
     cadastros: true,
     configuracoes: true,
     simuladores: true
@@ -38,6 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const isAnalisesActive = currentTab.startsWith('analises-');
+  const isAdsActive = currentTab.startsWith('ads-');
   const isSimuladoresActive = currentTab.startsWith('simuladores-');
 
   return (
@@ -230,6 +233,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
                         isActive 
                           ? 'text-blue-600 font-bold bg-blue-50/40' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Group 1.6: Ads */}
+          <div>
+            <button
+              onClick={() => !collapsed && toggleSection('ads')}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
+                isAdsActive
+                  ? 'text-slate-900 bg-slate-50/50'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Megaphone className="w-4 h-4 text-slate-500 shrink-0" />
+                {!collapsed && <span>Ads (BI)</span>}
+              </div>
+              {!collapsed && (
+                openSections.ads ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              )}
+            </button>
+
+            {openSections.ads && !collapsed && (
+              <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
+                {[
+                  { id: 'ads-meta', label: 'Meta Ads' },
+                  { id: 'ads-google-analytics', label: 'Google Analytics' }
+                ].map(item => {
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setCurrentTab(item.id)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                        isActive
+                          ? 'text-blue-600 font-bold bg-blue-50/40'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
                       }`}
                     >

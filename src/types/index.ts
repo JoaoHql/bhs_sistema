@@ -44,3 +44,77 @@ export interface SyncLog {
   durationSeconds: number;
   initiatedBy: string;
 }
+
+export type DataMode = 'mock' | 'api';
+
+export type DataStatus = 'ready' | 'loading' | 'fallback' | 'error';
+
+export interface DashboardDataSnapshot {
+  customers: Customer[];
+  metas: Meta[];
+  users: User[];
+  syncLogs: SyncLog[];
+  lastUpdated: string;
+}
+
+export type AdsPlatform = 'meta' | 'google-analytics';
+
+export interface AdsKpi {
+  id: string;
+  label: string;
+  value: string;
+  delta: string;
+  tone: 'blue' | 'emerald' | 'amber' | 'rose' | 'slate';
+}
+
+export interface AdsTimeSeriesPoint {
+  label: string;
+  investimento?: number;
+  receita?: number;
+  leads?: number;
+  cpl?: number;
+  sessoes?: number;
+  usuarios?: number;
+  conversoes?: number;
+  engajamento?: number;
+}
+
+export interface AdsBreakdownItem {
+  name: string;
+  value: number;
+  color: string;
+}
+
+export interface AdsRankingItem {
+  name: string;
+  value: number;
+  secondary?: string;
+}
+
+export interface AdsPlatformSummary {
+  title: string;
+  spend?: number;
+  revenue?: number;
+  conversions?: number;
+  roas?: number;
+  sessions?: number;
+  engagementRate?: number;
+}
+
+export interface AdsDashboard {
+  platform: AdsPlatform;
+  title: string;
+  subtitle: string;
+  kpis: AdsKpi[];
+  timeline: AdsTimeSeriesPoint[];
+  summaryCards: AdsPlatformSummary[];
+  breakdown: AdsBreakdownItem[];
+  ranking: AdsRankingItem[];
+  channelPerformance: AdsRankingItem[];
+}
+
+export interface AdsDashboardSnapshot {
+  meta: AdsDashboard;
+  googleAnalytics: AdsDashboard;
+  lastUpdated: string;
+}

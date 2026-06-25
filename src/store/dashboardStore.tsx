@@ -1,9 +1,13 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
-import type { Customer, Meta, User, SyncLog, RFVCluster } from '../types';
-
-import { generateCustomers, initialMetas, initialUsers, initialSyncLogs } from '../services/mockData';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { Customer, DataMode, DataStatus, Meta, RFVCluster, SyncLog, User } from '../types';
+import { getInitialDataMode, loadDashboardData, persistDataMode, syncDashboardData } from '../services/dashboardData';
 
 interface DashboardContextType {
+  dataMode: DataMode;
+  setDataMode: (mode: DataMode) => void;
+  dataStatus: DataStatus;
+  dataStatusMessage: string;
+
   // Filter States
   period: string;
   branch: string;
@@ -42,6 +46,10 @@ interface DashboardContextType {
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
 export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [dataMode, setDataModeState] = useState<DataMode>(() => getInitialDataMode());
+  const [dataStatus, setDataStatus] = useState<DataStatus>('loading');
+  const [dataStatusMessage, setDataStatusMessage] = useState<string>('Carregando dados...');
+
   // State for filters
   const [period, setPeriod] = useState<string>('Jun/2026');
   const [branch, setBranch] = useState<string>('All');
@@ -50,12 +58,43 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   // State for data
-  const [customers, setCustomers] = useState<Customer[]>(() => generateCustomers());
-  const [metas, setMetas] = useState<Meta[]>(initialMetas);
-  const [users, setUsers] = useState<User[]>(initialUsers);
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>(initialSyncLogs);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [metas, setMetas] = useState<Meta[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [lastUpdated, setLastUpdated] = useState<string>('15:10:00');
+  const [lastUpdated, setLastUpdated] = useState<string>('--:--:--');
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setDataStatus('loading');
+      setDataStatusMessage(dataMode === 'mock' ? 'Carregando massa mockada...' : 'Carregando dados da API...');
+
+      const result = await loadDashboardData(dataMode);
+      if (!active) return;
+
+      setCustomers(result.snapshot.customers);
+      setMetas(result.snapshot.metas);
+      setUsers(result.snapshot.users);
+      setSyncLogs(result.snapshot.syncLogs);
+      setLastUpdated(result.snapshot.lastUpdated);
+      setDataStatus(result.status);
+      setDataStatusMessage(result.message);
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [dataMode]);
+
+  const setDataMode = (mode: DataMode) => {
+    persistDataMode(mode);
+    setDataModeState(mode);
+  };
 
   // Reset all filters
   const clearFilters = () => {
@@ -98,38 +137,22 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const syncNow = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2500));
-    
-    const now = new Date();
-    const timeString = now.toTimeString().split(' ')[0];
-    const dateString = now.toISOString().slice(0, 10);
-    
-    const newLog: SyncLog = {
-      id: `LOG-00${syncLogs.length + 1}`,
-      timestamp: `${dateString} ${timeString}`,
-      status: 'Success',
-      rowsProcessed: Math.floor(Math.random() * 500) + 12500,
-      durationSeconds: parseFloat((Math.random() * 2 + 2).toFixed(1)),
-      initiatedBy: 'Bruno Henrique (Manual)'
-    };
-    
-    setSyncLogs(prev => [newLog, ...prev]);
-    // Randomly update customer counts or values slightly to simulate "new data"
-    setCustomers(prev => prev.map(c => {
-      if (Math.random() > 0.8) {
-        return {
-          ...c,
-          recency: Math.max(1, c.recency - Math.floor(Math.random() * 3)),
-          frequency: c.frequency + 1,
-          value: c.value + Math.floor(Math.random() * 5000)
-        };
-      }
-      return c;
-    }));
 
-    setLastUpdated(timeString);
+    const result = await syncDashboardData(dataMode, {
+      customers,
+      metas,
+      users,
+      syncLogs,
+      lastUpdated
+    });
+
+    setCustomers(result.snapshot.customers);
+    setMetas(result.snapshot.metas);
+    setUsers(result.snapshot.users);
+    setSyncLogs(result.snapshot.syncLogs);
+    setLastUpdated(result.snapshot.lastUpdated);
+    setDataStatus(result.status);
+    setDataStatusMessage(result.message);
     setIsSyncing(false);
   };
 
@@ -170,6 +193,11 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   return (
     <DashboardContext.Provider value={{
+      dataMode,
+      setDataMode,
+      dataStatus,
+      dataStatusMessage,
+
       period,
       branch,
       region,

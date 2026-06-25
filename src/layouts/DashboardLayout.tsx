@@ -15,6 +15,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children
 }) => {
   const {
+    dataMode,
+    dataStatus,
     period,
     setPeriod,
     branch,
@@ -37,6 +39,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const hasActiveFilters = branch !== 'All' || region !== 'All' || cluster !== 'All' || searchQuery !== '';
 
   const getBreadcrumbTitle = () => {
+    if (currentTab.startsWith('analises-')) return 'Modulo de Analises';
+    if (currentTab.startsWith('financeiro-')) return 'Modulo Financeiro';
+    if (currentTab.startsWith('ads-')) return 'Modulo Ads';
+    if (currentTab.startsWith('simuladores-')) return 'Simuladores';
+    if (currentTab === 'agente') return 'Agente de Decisao';
+
     switch (currentTab) {
       case 'analises':
         return 'Módulo de Análises';
@@ -72,6 +80,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
           {/* Top Bar Macro Filters & Actions */}
           <div className="flex items-center space-x-4">
+            <div className={`hidden lg:inline-flex items-center rounded-md border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider ${
+              dataStatus === 'error'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : dataStatus === 'fallback'
+                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                : 'border-slate-200 bg-slate-50 text-slate-600'
+            }`}>
+              {dataMode} · {dataStatus}
+            </div>
+
             {/* Sync Status / Action */}
             <div className="flex items-center space-x-2.5 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-md border border-slate-200 shadow-sm">
               <span className="flex h-2.5 w-2.5 relative">
