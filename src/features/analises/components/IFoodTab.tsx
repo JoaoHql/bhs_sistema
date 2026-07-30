@@ -5,6 +5,7 @@ import {
   BarChart, Bar, Legend, PieChart, Pie, Cell, LabelList
 } from 'recharts';
 import { DollarSign, Clock, Utensils, ThumbsUp, TrendingUp } from 'lucide-react';
+import { formatSpecializedCurrency as formatBRL, formatSpecializedNumber as formatNumber } from '../../../utils/chartLabels';
 
 const COLORS = ['#ea1d2c', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 
@@ -16,15 +17,6 @@ export const IFoodTab: React.FC = () => {
     const totalSales = filteredCustomers.reduce((acc, c) => acc + c.value, 0);
     return Math.max(0.05, totalSales / 5000000);
   }, [filteredCustomers]);
-
-  // Format Helper
-  const formatBRL = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
-  };
-
-  const formatNumber = (val: number) => {
-    return new Intl.NumberFormat('pt-BR').format(val);
-  };
 
   // KPIs
   const kpis = useMemo(() => {

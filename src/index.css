@@ -44,6 +44,34 @@
   }
 }
 
+@keyframes tenant-loading-progress {
+  from { transform: translateX(-140%); }
+  to { transform: translateX(350%); }
+}
+
+.tenant-loading-bar {
+  animation: tenant-loading-progress 1.25s ease-in-out infinite;
+}
+
+.data-table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.data-table-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.data-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.data-table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
 .animate-pulse-fast {
   animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

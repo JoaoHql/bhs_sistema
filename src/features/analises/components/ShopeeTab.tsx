@@ -5,6 +5,7 @@ import {
   BarChart, Bar, Legend, PieChart, Pie, Cell, LabelList
 } from 'recharts';
 import { DollarSign, ShoppingBag, Percent, TrendingUp, AlertTriangle } from 'lucide-react';
+import { formatSpecializedCompactCurrency, formatSpecializedCurrency as formatBRL, formatSpecializedNumber as formatNumber } from '../../../utils/chartLabels';
 
 const COLORS = ['#ee4d2d', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#f59e0b'];
 
@@ -16,15 +17,6 @@ export const ShopeeTab: React.FC = () => {
     const totalSales = filteredCustomers.reduce((acc, c) => acc + c.value, 0);
     return Math.max(0.05, totalSales / 5000000);
   }, [filteredCustomers]);
-
-  // Format Helpers
-  const formatBRL = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
-  };
-
-  const formatNumber = (val: number) => {
-    return new Intl.NumberFormat('pt-BR').format(val);
-  };
 
   // KPIs
   const kpiData = useMemo(() => {
@@ -426,7 +418,7 @@ export const ShopeeTab: React.FC = () => {
                   contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                 />
                 <Bar dataKey="Valor" radius={[0, 3, 3, 0]}>
-                  <LabelList dataKey="Valor" position="right" formatter={(v: any) => `R$${Math.round(Number(v)/1000)}k`} style={{ fill: '#475569', fontSize: 8, fontWeight: 'bold' }} />
+                  <LabelList dataKey="Valor" position="right" formatter={formatSpecializedCompactCurrency} style={{ fill: '#475569', fontSize: 8, fontWeight: 'bold' }} />
                   {financialStructureData.map((entry, index) => {
                     const isSelected = searchQuery === entry.name;
                     return (

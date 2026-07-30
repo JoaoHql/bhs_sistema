@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useDashboard } from '../../../store/dashboardStore';
+import type { WorkspaceSource, ChartConfig, AppModule } from '../../../types';
+import { DynamicChart } from '../../../components/shared/DynamicChart';
 import { 
   Send, 
   Sparkles, 
@@ -10,7 +13,9 @@ import {
   HelpCircle,
   Clock,
   Monitor,
-  Mic
+  Mic,
+  RotateCcw,
+  Folder
 } from 'lucide-react';
 
 interface Message {
@@ -19,6 +24,7 @@ interface Message {
   text: string;
   timestamp: string;
   isStreaming?: boolean;
+  textHistory?: string[]; // Histórico para o botão Desfazer (Undo)
 }
 
 interface ChatSession {
@@ -33,84 +39,309 @@ const formatTime = () => {
   return now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 };
 
-// Response mapping based on actual dashboard data
-const getAgentResponse = (userText: string): string => {
+interface ParsedContent {
+  type: 'text' | 'chart' | 'module';
+  content: string;
+  chartConfig?: ChartConfig;
+  moduleConfig?: AppModule;
+}
+
+const parseMessageContent = (text: string, isStreaming?: boolean): ParsedContent[] => {
+  const parts: ParsedContent[] = [];
+  const regex = /```(json_chart|json_module)\s*([\s\S]*?)\s*```/g;
+  
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = regex.exec(text)) !== null) {
+    const textBefore = text.substring(lastIndex, match.index);
+    if (textBefore.trim()) {
+      parts.push({ type: 'text', content: textBefore });
+    }
+    
+    const blockType = match[1];
+    const jsonStr = match[2];
+    
+    if (!isStreaming) {
+      try {
+        if (blockType === 'json_chart') {
+          const chartConfig: ChartConfig = JSON.parse(jsonStr);
+          parts.push({
+            type: 'chart',
+            content: jsonStr,
+            chartConfig
+          });
+        } else if (blockType === 'json_module') {
+          const moduleConfig: AppModule = JSON.parse(jsonStr);
+          parts.push({
+            type: 'module',
+            content: jsonStr,
+            moduleConfig
+          });
+        }
+      } catch (err) {
+        console.error(`Erro ao fazer parse do ${blockType}:`, err);
+        parts.push({ type: 'text', content: match[0] });
+      }
+    } else {
+      parts.push({
+        type: 'text',
+        content: blockType === 'json_chart'
+          ? '\n*(🤖 Preparando visualização de dados...)*\n'
+          : '\n*(⚙️ Configurando novo módulo na barra lateral...)*\n'
+      });
+    }
+    
+    lastIndex = regex.lastIndex;
+  }
+  
+  const textAfter = text.substring(lastIndex);
+  if (textAfter.trim() || parts.length === 0) {
+    parts.push({ type: 'text', content: textAfter });
+  }
+  
+  return parts;
+};
+
+// Response mapping based on actual dashboard data and active workspaces
+const getAgentResponse = (userText: string, activeWorkspaces: WorkspaceSource[]): string => {
   const text = userText.toLowerCase();
   
-  if (text.includes('filial') || text.includes('filiais') || text.includes('sudeste') || text.includes('nordeste') || text.includes('vendeu')) {
-    return `Analisando os dados consolidados das filiais, a **Filial Sudeste** é a líder absoluta de faturamento, acumulando **R$ 9.246.720** anualizados. Isso representa **42% da receita total** da empresa.
+  const activeBases = activeWorkspaces.filter(w => w.isActiveForAgent);
+  if (activeBases.length === 0) {
+    return `⚠️ **Nenhuma base de dados ativa no momento!**
 
-Aqui está a distribuição de participação por filial:
+Para que eu possa responder perguntas ou criar visualizações de dados, você precisa ir ao menu **Workspace de Dados** ou usar o seletor no topo da tela do chat para ativar pelo menos uma fonte de dados de simulação.`;
+  }
+
+  const baseNames = activeBases.map(b => `\`${b.fileNameOrConn}\``).join(', ');
+
+  // Dynamic Module Creator Triggers - Redirect to Ask AI
+  if (text.includes('crie um módulo') || text.includes('criar módulo') || text.includes('cria um modulo') || text.includes('novo módulo') || text.includes('crie uma aba') || text.includes('cria o modulo') || text.includes('crie a aba') || text.includes('cria uma tela') || text.includes('criar tela') || text.includes('crie a tela') || text.includes('remover tela') || text.includes('deletar tela') || text.includes('excluir tela')) {
+    return `⚙️ **Painel de Configuração de Layouts & Telas (Ask AI)**
+
+Para criar, modificar ou desfazer telas e módulos no menu, por favor utilize o painel exclusivo **Ask AI** clicando no botão **Sparkles Ask AI** localizado no canto superior direito da tela (ao lado do botão de Suporte). 
+
+Ele foi desenhado especificamente para gerenciar a infraestrutura visual do seu painel de BI de forma consistente e padronizada.`;
+  }
+
+  // CASE 1: Only SQLite base is active (vendas_shopee_2026.db)
+  const isOnlyShopee = activeBases.length === 1 && activeBases[0].type === 'sqlite';
+  if (isOnlyShopee) {
+    if (text.includes('filial') || text.includes('filiais') || text.includes('sudeste') || text.includes('nordeste') || text.includes('vendeu')) {
+      return `Consultando exclusivamente a base SQLite da **Shopee** (${baseNames}):
+
+A **Filial Sudeste** despachou a maior fatia de pedidos integrados do marketplace:
+* **Filial Sudeste**: R$ 1.246.720 (45.0% de participação)
+* **Filial Sul**: R$ 885.440 (32.0% de participação)
+* **Filial Nordeste**: R$ 638.840 (23.0% de participação)
+
+\`\`\`json_chart
+{
+  "id": "chart-sales-filial-shopee",
+  "workspaceId": "ws-2",
+  "type": "bar",
+  "title": "Pedidos Shopee por Filial",
+  "description": "Faturamento agregado por filial na plataforma Shopee (SQLite).",
+  "dimensions": [{"field": "filial", "label": "Filial"}],
+  "metrics": [{"field": "valor_pago", "label": "Faturamento", "aggregation": "sum", "format": "currency"}],
+  "options": {"color": "#ea580c"}
+}
+\`\`\`
+
+*Nota: Estes valores refletem apenas transações cujo canal registrado na base de dados é a Shopee.*`;
+    }
+    if (text.includes('pedido') || text.includes('frete') || text.includes('taxa') || text.includes('shopee') || text.includes('status')) {
+      return `Acessando o dicionário e dados da base **Shopee** (${baseNames}):
+
+O **valor de frete acumulado** somou **R$ 214.104**, com um ticket de frete médio de **R$ 12,00** por envio. 
+Status de pedidos mapeados:
+* **Enviados**: 78%
+* **Entregues**: 18%
+* **Cancelados**: 4%`;
+    }
+  }
+
+  // CASE 2: Only Excel base is active (clientes_rfv_crm.xlsx)
+  const isOnlyCRM = activeBases.length === 1 && activeBases[0].type === 'excel';
+  if (isOnlyCRM) {
+    if (text.includes('rfv') || text.includes('clientes') || text.includes('at risk') || text.includes('risco') || text.includes('segmentos')) {
+      return `Acessando os registros da planilha de CRM **Excel** (${baseNames}):
+
+Mapeei a segmentação RFV (Recência, Frequência e Valor) dos clientes ativos:
+* **Champions**: Clientes recorrentes de alto valor.
+* **Loyal**: Clientes frequentes de ticket médio.
+* **At Risk**: Clientes sem transações nos últimos 90 dias.
+
+\`\`\`json_chart
+{
+  "id": "chart-rfv-segments-crm",
+  "workspaceId": "ws-3",
+  "type": "pie",
+  "title": "Distribuição de Clientes por Cluster RFV",
+  "description": "Participação no volume total gasto por segmento (Excel).",
+  "dimensions": [{"field": "cluster_segmento", "label": "Cluster"}],
+  "metrics": [{"field": "total_gasto", "label": "Total Gasto", "aggregation": "sum", "format": "currency"}],
+  "options": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"]}
+}
+\`\`\`
+
+*Ação recomendada para 'At Risk': Disparar uma campanha de e-mail marketing oferecendo cupom de desconto em serviços de licença.*`;
+    }
+  }
+
+  // CASE 3: Only API base is active (dre_consolidado_api)
+  const isOnlyDRE = activeBases.length === 1 && activeBases[0].type === 'api';
+  if (isOnlyDRE) {
+    if (text.includes('dre') || text.includes('lucro') || text.includes('líquido') || text.includes('ebitda') || text.includes('caixa')) {
+      return `Consumindo os demonstrativos contábeis via **API REST** (${baseNames}):
+
+Dados gerados via API consolidada:
+* **Receita Bruta**: R$ 2.450.000,00
+* **Deduções e Devoluções**: R$ 380.000,00
+* **Custos Operacionais**: R$ 1.890.000,00
+* **EBITDA**: R$ 438.450,00 (Margem de 17.8%)
+* **Lucro Líquido**: R$ 310.000,00
+
+\`\`\`json_chart
+{
+  "id": "chart-dre-api-evolution",
+  "workspaceId": "ws-4",
+  "type": "line",
+  "title": "Evolução do Lucro Líquido (API)",
+  "description": "Resultado financeiro líquido por mês de referência da DRE.",
+  "dimensions": [{"field": "mes_ano", "label": "Mês/Ano"}],
+  "metrics": [{"field": "lucro_liquido", "label": "Lucro Líquido", "aggregation": "sum", "format": "currency"}],
+  "options": {"color": "#0ea5e9"}
+}
+\`\`\`
+
+*A API está online e respondendo com status 200 (Sucesso).*`;
+    }
+  }
+
+  // GENERAL/CONSOLIDATED CASE (Multiple bases active)
+  if (text.includes('filial') || text.includes('filiais') || text.includes('sudeste') || text.includes('nordeste') || text.includes('vendeu')) {
+    return `Analisando os dados consolidados das filiais, baseando-me nas fontes ativas (${baseNames}):
+
+A **Filial Sudeste** é a líder absoluta de faturamento no período, acumulando **R$ 9.246.720** anualizados. Isso representa **42% da receita total** da empresa.
+
+Distribuição de faturamento consolidada:
 * **Filial Sudeste**: R$ 9.246.720 (42.0% de participação)
 * **Filial Sul**: R$ 7.485.440 (34.0% de participação)
 * **Filial Nordeste**: R$ 5.283.840 (24.0% de participação)
 
-*A Filial Nordeste, embora menor, foi a que apresentou a maior taxa de crescimento proporcional no último trimestre (+12.4% MoM).*`;
+\`\`\`json_chart
+{
+  "id": "chart-sales-filial-consolidated",
+  "workspaceId": "ws-1",
+  "type": "bar",
+  "title": "Faturamento Consolidado por Filial",
+  "description": "Faturamento total agrupado por filial geográfica (CSV).",
+  "dimensions": [{"field": "filial", "label": "Filial"}],
+  "metrics": [{"field": "valor_liquido", "label": "Faturamento", "aggregation": "sum", "format": "currency"}],
+  "options": {"color": "#3b82f6"}
+}
+\`\`\`
+
+*Informação consolidada cruzando dados contidos nas bases: ${baseNames}.*`;
   }
   
   if (text.includes('dre') || text.includes('lucro') || text.includes('líquido') || text.includes('liquido') || text.includes('consolidado') || text.includes('margem liquida') || text.includes('margem líquida')) {
-    return `De acordo com o demonstrativo da **DRE Gerencial**, o **Lucro Líquido consolidado do ano** fechou em **R$ 3.058.460**, o que resulta em uma **margem líquida média de 13.9%** sobre a Receita Líquida total (R$ 22.016.000).
+    return `De acordo com o demonstrativo da **DRE Gerencial** extraído das fontes (${baseNames}), o **Lucro Líquido consolidado do ano** fechou em **R$ 3.058.460**, resultando em uma **margem líquida média de 13.9%** sobre a Receita Líquida total.
 
-Principais destaques do resultado:
+Destaques da DRE consolidada:
 * **Receita Líquida**: R$ 22.016.000 (100.0%)
 * **Lucro Bruto**: R$ 12.373.000 (56.2% de margem)
 * **EBITDA**: R$ 4.028.928 (18.3% de margem)
 * **Lucro Líquido**: R$ 3.058.460 (13.9% de margem)
 
-*O principal gargalo operacional identificado foram os custos com CMV/CSP que consumiram 43.8% da receita líquida.*`;
+\`\`\`json_chart
+{
+  "id": "chart-dre-evolution-consolidated",
+  "workspaceId": "ws-4",
+  "type": "line",
+  "title": "Evolução do Lucro Líquido Consolidado",
+  "description": "Demonstração de lucros líquidos agregados do DRE (API).",
+  "dimensions": [{"field": "mes_ano", "label": "Mês/Ano"}],
+  "metrics": [{"field": "lucro_liquido", "label": "Lucro Líquido", "aggregation": "sum", "format": "currency"}],
+  "options": {"color": "#10b981"}
+}
+\`\`\`
+
+*Essa análise cruza registros contábeis consolidados a partir de: ${baseNames}.*`;
   }
   
   if (text.includes('rfv') || text.includes('clientes') || text.includes('at risk') || text.includes('risco') || text.includes('segmentação') || text.includes('segmentos')) {
-    return `A nossa segmentação **RFV (Recência, Frequência e Valor)** dividiu a carteira de clientes ativos nos seguintes grupos:
+    return `A segmentação de clientes **RFV** processada a partir das fontes selecionadas (${baseNames}) dividiu nossa carteira de faturamento nos seguintes grupos:
 
-* **Champions** (35% do faturamento): Clientes de alta recência, alta frequência e alto ticket. Recomendação: campanhas de relacionamento e fidelidade exclusivas.
-* **Loyal** (40% do faturamento): Clientes frequentes de ticket médio. Recomendação: cross-selling e up-selling de serviços secundários.
-* **At Risk** (25% do faturamento): Clientes que compravam muito, mas estão sem nenhuma transação nos últimos 90 dias.
+* **Champions** (35% do faturamento): Clientes de alta recência e alta frequência.
+* **Loyal** (40% do faturamento): Clientes frequentes de ticket médio.
+* **At Risk** (25% do faturamento): Clientes inativos nos últimos 90 dias.
 
-**Plano de Ação sugerido para o grupo 'At Risk'**:
-*Recomendo realizar um disparo imediato de e-mail marketing oferecendo reativação baseada nos produtos adquiridos anteriormente, acoplada a um cupom de incentivo, ou contato direto do time de CS. A probabilidade de recuperar um cliente deste segmento é 3x superior à conversão de um lead novo.*`;
+\`\`\`json_chart
+{
+  "id": "chart-rfv-segments-consolidated",
+  "workspaceId": "ws-3",
+  "type": "pie",
+  "title": "Distribuição de Clientes por Cluster RFV",
+  "description": "Participação no volume total gasto por segmento (Planilha Excel).",
+  "dimensions": [{"field": "cluster_segmento", "label": "Cluster"}],
+  "metrics": [{"field": "total_gasto", "label": "Total Gasto", "aggregation": "sum", "format": "currency"}],
+  "options": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6"]}
+}
+\`\`\`
+
+*Ação para 'At Risk': Disparar e-mail marketing oferecendo cupom de desconto em renovações de licenças.*`;
   }
   
   if (text.includes('ebitda') || text.includes('margem ebitda') || text.includes('caixa')) {
-    return `O **EBITDA acumulado do exercício** fechou em **R$ 4.028.928**, correspondendo a uma **margem EBITDA consolidada de 18.3%** sobre a Receita Líquida total de R$ 22.016.000.
+    return `O **EBITDA consolidado** calculado a partir das bases (${baseNames}) fechou em **R$ 4.028.928**, correspondendo a uma **margem EBITDA consolidada de 18.3%** sobre a Receita Líquida total de R$ 22.016.000.
 
 O EBITDA operacional teve seu melhor desempenho nos meses de:
 * **Junho**: R$ 438.450 (18.6% de margem)
 * **Dezembro**: R$ 603.900 (19.8% de margem)
 
-*Esse patamar demonstra excelente capacidade de geração de caixa das operações essenciais, descontando efeitos puramente tributários, depreciações e encargos de dívidas.*`;
+\`\`\`json_chart
+{
+  "id": "chart-ebitda-evolution-consolidated",
+  "workspaceId": "ws-4",
+  "type": "bar",
+  "title": "Evolução do EBITDA Mensal",
+  "description": "Evolução do Lucro EBITDA gerencial por mês de referência (API).",
+  "dimensions": [{"field": "mes_ano", "label": "Mês/Ano"}],
+  "metrics": [{"field": "ebitda", "label": "EBITDA", "aggregation": "sum", "format": "currency"}],
+  "options": {"color": "#8b5cf6"}
+}
+\`\`\`
+
+*Estatísticas calculadas a partir das conexões ativas: ${baseNames}.*`;
   }
   
   if (text.includes('oi') || text.includes('olá') || text.includes('ola') || text.includes('bom dia') || text.includes('boa tarde') || text.includes('ajuda') || text.includes('quem é você')) {
-    return `Olá! Eu sou o **Agente Cognitivo da BHS**, seu assistente virtual especializado em Business Intelligence.
+    return `Olá! Eu sou o **Agente de Decisão BHS**, integrado ao seu painel de BI.
 
-Posso responder perguntas detalhadas sobre os dados consolidados do seu negócio. 
+No momento, estou direcionado e respondendo com base nas **fontes de dados ativas**: ${baseNames}.
 
-Tente clicar em uma das sugestões rápidas na tela ou pergunte algo como:
-- *"Qual filial vendeu mais?"*
-- *"Como ficou o Lucro Líquido consolidado na DRE?"*
-- *"O que fazer com os clientes At Risk?"*
-- *"Qual a margem EBITDA média do ano?"*`;
+Posso responder perguntas sobre desempenho de filiais, DRE ou margem EBITDA. O que deseja consultar?`;
   }
 
-  // Fallback response showing options
-  return `Entendi sua dúvida. Como estou em modo de homologação, posso detalhar informações consolidadas da base real do seu dashboard. 
-
-Por favor, escolha um dos temas que já tenho mapeados:
-1. **Faturamento de Filiais** (Sul, Sudeste e Nordeste).
-2. **Lucro Líquido** e margens na DRE Gerencial.
-3. Plano de ação para clientes **At Risk** (segmentação RFV).
-4. Margens e valores mensais de **EBITDA**.
-
-Pergunte algo como: *'Qual filial vendeu mais?'* ou *'Como ficou a margem líquida?'*`;
+  return `Entendi sua dúvida. No modo de homologação com as bases de dados selecionadas (${baseNames}), posso responder perguntas como:
+* *"Qual filial vendeu mais?"*
+* *"Como ficou o Lucro Líquido consolidado na DRE?"*
+* *"Qual a margem EBITDA média?"*
+* *"Como tratar clientes At Risk?"*`;
 };
 
-// Word-by-word streaming effect component
 const StreamText: React.FC<{ text: string; onComplete: () => void }> = ({ text, onComplete }) => {
   const [displayedText, setDisplayedText] = useState('');
   
   useEffect(() => {
-    const words = text.split(' ');
+    // Strip both json_chart and json_module blocks for typing animation, replacing them with custom indicators
+    const cleanText = text
+      .replace(/```json_chart\s*([\s\S]*?)\s*```/g, '\n*(🤖 Preparando visualização de dados...)*\n')
+      .replace(/```json_module\s*([\s\S]*?)\s*```/g, '\n*(⚙️ Configurando novo módulo na barra lateral...)*\n');
+    const words = cleanText.split(' ');
     let currentIndex = 0;
     
     const interval = setInterval(() => {
@@ -121,7 +352,7 @@ const StreamText: React.FC<{ text: string; onComplete: () => void }> = ({ text, 
         clearInterval(interval);
         onComplete();
       }
-    }, 20); // smooth word typing speed
+    }, 15);
     
     return () => clearInterval(interval);
   }, [text, onComplete]);
@@ -129,10 +360,9 @@ const StreamText: React.FC<{ text: string; onComplete: () => void }> = ({ text, 
   return <>{renderMessageText(displayedText)}</>;
 };
 
-// Bold and list parser helper (translates markdown to visual elements matching mockup)
+// Bold and list parser helper
 const renderMessageText = (text: string) => {
   return text.split('\n').map((line, lineIndex) => {
-    // Custom blue bullet points
     if (line.trim().startsWith('*') || line.trim().startsWith('-')) {
       const content = line.trim().substring(1).trim();
       return (
@@ -162,7 +392,6 @@ const renderMessageText = (text: string) => {
 };
 
 const renderBoldText = (text: string) => {
-  // Check for italic note wrapped in asterisks
   if (text.startsWith('*') && text.endsWith('*')) {
     return <span className="italic text-slate-500 font-medium">{text.slice(1, -1)}</span>;
   }
@@ -181,6 +410,8 @@ const renderBoldText = (text: string) => {
 };
 
 export const AgenteView: React.FC = () => {
+  const { workspaces, toggleWorkspaceActive, addUserModule, setCurrentTab } = useDashboard();
+
   const [sessions, setSessions] = useState<ChatSession[]>([
     {
       id: 'session-2',
@@ -212,53 +443,202 @@ export const AgenteView: React.FC = () => {
   
   const [activeSessionId, setActiveSessionId] = useState<string>('session-2');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
+  const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Sync active messages with selected session
+  // Sync active messages when session changes
   useEffect(() => {
-    const session = sessions.find(s => s.id === activeSessionId);
-    if (session) {
-      setMessages(session.messages);
+    const activeSession = sessions.find(s => s.id === activeSessionId);
+    if (activeSession) {
+      setMessages(activeSession.messages);
     }
-  }, [activeSessionId, sessions]);
+  }, [sessions, activeSessionId]);
 
-  // Auto scroll to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  // Scroll to bottom on new messages
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSendMessage = (text: string) => {
-    if (!text.trim()) return;
+  // Effect to scan messages for dynamic modules generated by IA and register them in the store
+  useEffect(() => {
+    sessions.forEach(session => {
+      session.messages.forEach(msg => {
+        if (msg.sender === 'agent' && !msg.isStreaming) {
+          const regex = /```json_module\s*([\s\S]*?)\s*```/g;
+          let match;
+          while ((match = regex.exec(msg.text)) !== null) {
+            try {
+              const mod: AppModule = JSON.parse(match[1]);
+              addUserModule(mod);
+            } catch (err) {
+              console.error('Erro ao ler modulo dinamico do chat:', err);
+            }
+          }
+        }
+      });
+    });
+  }, [sessions, addUserModule]);
 
-    const time = formatTime();
+  // handle undo configuration from message history
+  const handleUndoMessage = (msgId: string) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionId) {
+        return {
+          ...s,
+          messages: s.messages.map(m => {
+            if (m.id === msgId && m.textHistory && m.textHistory.length > 0) {
+              const history = [...m.textHistory];
+              const previousText = history.pop()!;
+              return {
+                ...m,
+                text: previousText,
+                textHistory: history
+              };
+            }
+            return m;
+          })
+        };
+      }
+      return s;
+    }));
+  };
+
+  const handleSendMessage = (textToSend?: string) => {
+    const text = textToSend || inputText;
+    if (!text.trim()) return;
+    
+    if (!textToSend) setInputText('');
+    
+    // Add user message to session
     const userMsg: Message = {
       id: `user-${Date.now()}`,
       sender: 'user',
       text: text,
-      timestamp: time
+      timestamp: formatTime()
     };
-
-    // Update active session messages
+    
     setSessions(prev => prev.map(s => {
       if (s.id === activeSessionId) {
         return { ...s, messages: [...s.messages, userMsg] };
       }
       return s;
     }));
-
-    setInputValue('');
+    
     setIsTyping(true);
-
+    
     // Simulate Agent Thinking Delay
     setTimeout(() => {
       setIsTyping(false);
-      const fullResponseText = getAgentResponse(text);
+      
+      const activeSession = sessions.find(s => s.id === activeSessionId);
+      const previousMessages = activeSession ? activeSession.messages : [];
+      
+      let fullResponseText = '';
+      let originalText: string | undefined;
+      
+      const cleanInput = text.toLowerCase().trim();
+      const isUndoText = cleanInput === 'desfazer' || cleanInput === 'voltar';
+      
+      if (isUndoText) {
+        // Find latest agent message that has history
+        const lastWithHistory = [...previousMessages].reverse().find(m => m.sender === 'agent' && m.textHistory && m.textHistory.length > 0);
+        if (lastWithHistory) {
+          handleUndoMessage(lastWithHistory.id);
+          fullResponseText = 'Sem problemas! Desfiz a última alteração do gráfico.';
+        } else {
+          fullResponseText = 'Não encontrei nenhuma alteração de gráfico recente para desfazer nesta conversa.';
+        }
+      } else if (
+        cleanInput.includes('linha') || cleanInput.includes('line') || 
+        cleanInput.includes('pizza') || cleanInput.includes('pie') || 
+        cleanInput.includes('barra') || cleanInput.includes('bar') || 
+        cleanInput.includes('cor') || cleanInput.includes('color') || 
+        cleanInput.includes('vermelho') || cleanInput.includes('azul') || 
+        cleanInput.includes('verde') || cleanInput.includes('roxo') || 
+        cleanInput.includes('laranja')
+      ) {
+        // Find latest agent message containing a chart config
+        const lastChartMsg = [...previousMessages].reverse().find(m => m.sender === 'agent' && m.text.includes('```json_chart'));
+        if (lastChartMsg) {
+          const match = /```json_chart\s*([\s\S]*?)\s*```/.exec(lastChartMsg.text);
+          if (match) {
+            try {
+              const chartConfig: ChartConfig = JSON.parse(match[1]);
+              let changed = false;
+              let changeDesc = '';
+              
+              if (cleanInput.includes('linha') || cleanInput.includes('line')) {
+                chartConfig.type = 'line';
+                changed = true;
+                changeDesc = 'tipo de gráfico para **Linha**';
+              } else if (cleanInput.includes('pizza') || cleanInput.includes('pie')) {
+                chartConfig.type = 'pie';
+                changed = true;
+                changeDesc = 'tipo de gráfico para **Pizza**';
+              } else if (cleanInput.includes('barra') || cleanInput.includes('bar')) {
+                chartConfig.type = 'bar';
+                changed = true;
+                changeDesc = 'tipo de gráfico para **Barras**';
+              }
+              
+              if (cleanInput.includes('vermelho')) {
+                chartConfig.options = { ...chartConfig.options, color: '#ef4444' };
+                changed = true;
+                changeDesc += (changeDesc ? ' e a ' : '') + 'cor para **Vermelho**';
+              } else if (cleanInput.includes('azul')) {
+                chartConfig.options = { ...chartConfig.options, color: '#3b82f6' };
+                changed = true;
+                changeDesc += (changeDesc ? ' e a ' : '') + 'cor para **Azul**';
+              } else if (cleanInput.includes('verde')) {
+                chartConfig.options = { ...chartConfig.options, color: '#10b981' };
+                changed = true;
+                changeDesc += (changeDesc ? ' e a ' : '') + 'cor para **Verde**';
+              } else if (cleanInput.includes('roxo')) {
+                chartConfig.options = { ...chartConfig.options, color: '#8b5cf6' };
+                changed = true;
+                changeDesc += (changeDesc ? ' e a ' : '') + 'cor para **Roxo**';
+              } else if (cleanInput.includes('laranja')) {
+                chartConfig.options = { ...chartConfig.options, color: '#f97316' };
+                changed = true;
+                changeDesc += (changeDesc ? ' e a ' : '') + 'cor para **Laranja**';
+              }
+              
+              if (changed) {
+                originalText = lastChartMsg.text;
+                
+                const updatedJsonStr = JSON.stringify(chartConfig, null, 2);
+                const newText = lastChartMsg.text.replace(/```json_chart[\s\S]*?```/, `\`\`\`json_chart\n${updatedJsonStr}\n\`\`\``);
+                
+                // Update the original message directly with history
+                setSessions(prev => prev.map(s => {
+                  if (s.id === activeSessionId) {
+                    return {
+                      ...s,
+                      messages: s.messages.map(m => m.id === lastChartMsg.id ? {
+                        ...m,
+                        text: newText,
+                        textHistory: [...(m.textHistory || []), originalText!]
+                      } : m)
+                    };
+                  }
+                  return s;
+                }));
+                
+                fullResponseText = `Certamente! Alterei o ${changeDesc} do gráfico anterior conforme solicitado. Você pode desfazer a alteração a qualquer momento usando o botão **Desfazer** no topo do gráfico.`;
+              }
+            } catch (err) {
+              console.error('Erro ao modificar o gráfico:', err);
+            }
+          }
+        }
+      }
+      
+      // If we didn't update an existing message, trigger standard response
+      if (!fullResponseText) {
+        fullResponseText = getAgentResponse(text, workspaces);
+      }
       
       const agentMsg: Message = {
         id: `agent-${Date.now()}`,
@@ -308,7 +688,6 @@ export const AgenteView: React.FC = () => {
         if (filtered.length > 0) {
           setActiveSessionId(filtered[0].id);
         } else {
-          // Reset to default session if none left
           const defId = 'session-default';
           return [{
             id: defId,
@@ -323,7 +702,6 @@ export const AgenteView: React.FC = () => {
   };
 
   const handleStreamingComplete = (msgId: string) => {
-    // Persist finalized message (remove isStreaming flag)
     setSessions(prev => prev.map(s => {
       if (s.id === activeSessionId) {
         return {
@@ -364,8 +742,8 @@ export const AgenteView: React.FC = () => {
 
   return (
     <div className="flex flex-1 w-full bg-slate-50 overflow-hidden h-full">
-      {/* LEFT COLUMN: Past Chats Sidebar (ChatGPT style) */}
-      <div className="w-64 border-r border-slate-200 bg-white flex flex-col shrink-0 hidden md:flex h-full">
+      {/* LEFT COLUMN: Past Chats Sidebar */}
+      <div className="w-64 border-r border-slate-200 bg-white flex flex-col shrink-0 hidden md:flex h-full font-sans select-none">
         {/* New Chat Button */}
         <div className="p-4 border-b border-slate-100 shrink-0">
           <button 
@@ -417,7 +795,7 @@ export const AgenteView: React.FC = () => {
           })}
         </div>
 
-        {/* Footer info matching mockup */}
+        {/* Footer info */}
         <div className="p-4 border-t border-slate-100 bg-white shrink-0">
           <div className="flex items-center space-x-2 text-[10px] font-bold text-slate-400">
             <MessageCircle className="w-4 h-4 text-slate-400" />
@@ -427,11 +805,10 @@ export const AgenteView: React.FC = () => {
       </div>
 
       {/* RIGHT COLUMN: Active Conversational Pane */}
-      <div className="flex-1 flex flex-col bg-[#f4f7fa] relative min-w-0 h-full overflow-hidden">
+      <div className="flex-1 flex flex-col bg-[#f4f7fa] relative min-w-0 h-full overflow-hidden font-sans select-none">
         {/* Chat Pane Header */}
         <div className="h-16 border-b border-slate-200 bg-white px-6 flex items-center justify-between shrink-0 shadow-xs z-10">
           <div className="flex items-center space-x-3 min-w-0">
-            {/* Monitor Avatar */}
             <div className="h-9 w-9 bg-[#0f172a] rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm">
               <Monitor className="w-5 h-5 text-slate-200" />
             </div>
@@ -442,6 +819,31 @@ export const AgenteView: React.FC = () => {
                 Assistente IA Online · Homologação
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Active Workspaces Selector Panel */}
+        <div className="bg-slate-50 border-b border-slate-200 px-6 py-2 flex flex-wrap items-center gap-3 shrink-0 select-none">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Filtro de Contexto (IA):</span>
+          <div className="flex flex-wrap gap-2">
+            {workspaces.map(ws => (
+              <button
+                key={ws.id}
+                onClick={() => toggleWorkspaceActive(ws.id)}
+                className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                  ws.isActiveForAgent
+                    ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm'
+                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${ws.isActiveForAgent ? 'bg-blue-600' : 'bg-slate-350'}`} />
+                <span>{ws.fileNameOrConn}</span>
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] text-slate-400 ml-auto flex items-center gap-1 font-semibold">
+            <Sparkles className="w-3 h-3 text-blue-500 animate-pulse" />
+            <span>Respostas focadas em {workspaces.filter(w => w.isActiveForAgent).length} fonte(s)</span>
           </div>
         </div>
 
@@ -479,7 +881,57 @@ export const AgenteView: React.FC = () => {
                             onComplete={() => handleStreamingComplete(msg.id)} 
                           />
                         ) : (
-                          renderMessageText(msg.text)
+                          <div className="space-y-3">
+                            {parseMessageContent(msg.text, false).map((part, partIdx) => {
+                              if (part.type === 'chart' && part.chartConfig) {
+                                return (
+                                  <div key={partIdx} className="relative group">
+                                    <DynamicChart config={part.chartConfig} />
+                                    {msg.textHistory && msg.textHistory.length > 0 && (
+                                      <button
+                                        onClick={() => handleUndoMessage(msg.id)}
+                                        className="absolute top-2 right-2 inline-flex items-center space-x-1 px-2 py-1 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-md text-[9px] font-bold text-slate-650 shadow-sm transition-all cursor-pointer z-10"
+                                        title="Desfazer última alteração do gráfico"
+                                      >
+                                        <RotateCcw className="w-3 h-3 text-slate-500" />
+                                        <span>Desfazer</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              
+                              if (part.type === 'module' && part.moduleConfig) {
+                                return (
+                                  <div key={partIdx} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between select-none my-2">
+                                    <div className="flex items-center space-x-3 min-w-0">
+                                      <div className="p-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-600 shrink-0">
+                                        <Folder className="w-4.5 h-4.5" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h4 className="text-[11px] font-extrabold text-slate-800 leading-tight">Módulo IA Instalado</h4>
+                                        <p className="text-[9px] text-slate-400 mt-0.5 truncate max-w-[170px] sm:max-w-[200px]">
+                                          O módulo <strong>{part.moduleConfig.label}</strong> foi anexado ao menu.
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => setCurrentTab(part.moduleConfig!.screens[0].id)}
+                                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
+                                    >
+                                      Acessar
+                                    </button>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div key={partIdx}>
+                                  {renderMessageText(part.content)}
+                                </div>
+                              );
+                            })}
+                          </div>
                         )
                       ) : (
                         <p className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed font-semibold">{msg.text}</p>
@@ -511,7 +963,7 @@ export const AgenteView: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick suggestions panels (only show when there are no user messages in the session yet) */}
+          {/* Quick suggestions panels */}
           {!messages.some(m => m.sender === 'user') && !isTyping && (
             <div className="max-w-3xl mx-auto mt-8 px-2">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center mb-4">Atalhos rápidos para análise de dados</p>
@@ -539,39 +991,55 @@ export const AgenteView: React.FC = () => {
           )}
         </div>
 
-        {/* Input Bar Section matching mockup */}
-        <div className="p-4 border-t border-slate-200 bg-white shrink-0">
+        {/* Input Bar Section */}
+        <div className="p-6 border-t border-slate-200 bg-white shrink-0 shadow-sm">
           <div className="max-w-3xl mx-auto">
-            <div className="flex items-center bg-white border border-slate-200 rounded-full py-1.5 pl-4 pr-2.5 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-              <Paperclip className="w-4.5 h-4.5 text-slate-400 cursor-pointer hover:text-slate-600 shrink-0" />
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+            <div className="relative flex items-center bg-slate-50 border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/5 rounded-2xl p-2 transition-all">
+              {/* Paperclip file attach */}
+              <button 
+                type="button" 
+                className="p-2 text-slate-400 hover:text-slate-650 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"
+                title="Anexar arquivo de dados"
+              >
+                <Paperclip className="w-4.5 h-4.5" />
+              </button>
+
+              {/* Chat Input Textbox */}
+              <textarea
+                rows={1}
+                placeholder="Pergunte à IA (ex: 'Qual filial vendeu mais?' ou 'Crie um módulo de logística')"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSendMessage(inputValue);
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
                   }
                 }}
-                placeholder="Pergunte ao Agente sobre filiais, DRE..."
-                disabled={isTyping}
-                className="flex-1 bg-transparent border-none focus:outline-none px-3 text-sm text-slate-800 placeholder-slate-400 disabled:opacity-50"
+                className="flex-1 max-h-32 min-h-[36px] bg-transparent border-none focus:ring-0 text-slate-750 placeholder:text-slate-400 text-xs sm:text-sm px-3 focus:outline-none resize-none align-middle pt-2"
               />
-              <div className="flex items-center space-x-2.5 shrink-0">
-                <Mic className="w-4.5 h-4.5 text-slate-400 cursor-pointer hover:text-slate-600" />
+
+              {/* Action buttons inside bar */}
+              <div className="flex items-center space-x-1.5 shrink-0">
+                <button 
+                  type="button" 
+                  className="p-2 text-slate-400 hover:text-slate-650 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                  title="Usar microfone (Voz para texto)"
+                >
+                  <Mic className="w-4.5 h-4.5" />
+                </button>
+
                 <button
-                  onClick={() => handleSendMessage(inputValue)}
-                  disabled={!inputValue.trim() || isTyping}
-                  className="h-8 w-8 rounded-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white disabled:text-slate-400 flex items-center justify-center transition-all cursor-pointer"
+                  type="button"
+                  disabled={!inputText.trim()}
+                  onClick={() => handleSendMessage()}
+                  className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl shadow-xs transition-colors cursor-pointer"
                   title="Enviar mensagem"
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  <Send className="w-4 h-4 fill-white" />
                 </button>
               </div>
             </div>
-            <p className="text-[9px] text-slate-400 font-semibold text-center mt-2.5">
-              O Agente virtual da BHS lê e sintetiza métricas. Informações geradas podem conter imprecisões com base nas massas de simulação.
-            </p>
           </div>
         </div>
       </div>
