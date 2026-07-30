@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useDashboard } from '../store/dashboardStore';
 import { 
   Database, 
   Settings, 
@@ -6,33 +7,169 @@ import {
   ChevronRight, 
   Eye,
   Megaphone,
+  MessageCircle,
   Sliders,
   Bot,
-  ShoppingBag
+  ShoppingBag,
+  Folder,
+  TrendingUp,
+  Globe,
+  FileText,
+  GripVertical,
+  CircleUserRound,
+  LogOut
 } from 'lucide-react';
+import { configApi, isConfigApiEnabled } from '../services/configApi';
+import { isStaffLibraryScreenEnabled } from '../config/staffLibrary';
+import { clearTenantDataCache } from '../services/tenantDataCache';
 
 interface SidebarProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  onOpenAccount: () => void;
+  onLogout: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   setCurrentTab,
   collapsed,
-  setCollapsed
+  setCollapsed,
+  onOpenAccount,
+  onLogout,
 }) => {
+  const { currentUser, userModules, userMenuOrder, setUserMenuOrder, showToast } = useDashboard();
+  const isStaff = !!currentUser?.is_staff;
+  const isTenantMaster = !isStaff && !!currentUser?.roles.includes('admin');
+  const canReorder = !!currentUser;
+  const visibleUserModules = userModules
+    .map((module) => ({ ...module, screens: module.screens.filter((screen) => screen.id !== 'configuracoes') }))
+    .filter((module) => module.screens.length > 0);
+  const availableTenantIds = [...visibleUserModules.map((module) => module.id), 'configuracoes'];
+  
+  const preferredTopModules = ['gestao-bi', 'analises', 'simuladores', 'mensagens'];
+  const unorderedTenantIds = availableTenantIds.filter((id) => !userMenuOrder.includes(id));
+  unorderedTenantIds.sort((a, b) => {
+    const idxA = preferredTopModules.indexOf(a);
+    const idxB = preferredTopModules.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return 0;
+  });
+
+  const normalizedUserOrder = [
+    ...userMenuOrder.filter((id) => availableTenantIds.includes(id)),
+    ...unorderedTenantIds,
+  ];
+  const menuPosition = (id: string) => {
+    const index = normalizedUserOrder.indexOf(id);
+    return index < 0 ? normalizedUserOrder.length + 1 : index + 1;
+  };
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    'gestao-bi': true,
     analises: true,
     marketplaces: true,
     financeiro: true,
     ads: true,
     cadastros: true,
     configuracoes: true,
-    simuladores: true
+    simuladores: true,
+    mensagens: true
   });
+  const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [dropIndicator, setDropIndicator] = useState<{ id: string; edge: 'before' | 'after' } | null>(null);
+  const pointerDrag = useRef<{ id: string; startY: number; active: boolean } | null>(null);
+  const currentDropIndicator = useRef<{ id: string; edge: 'before' | 'after' } | null>(null);
+  const suppressModuleClick = useRef(false);
+
+  const localOrderKey = currentUser ? `bhs_menu_order_${currentUser.client_slug ?? currentUser.id}` : null;
+
+  const dropModule = async (moduleId: string, targetId: string, edge: 'before' | 'after') => {
+    if (moduleId === targetId) return;
+
+    const previousOrder = normalizedUserOrder;
+    const nextOrder = previousOrder.filter((id) => id !== moduleId);
+    const targetIndex = nextOrder.indexOf(targetId);
+    nextOrder.splice(targetIndex + (edge === 'after' ? 1 : 0), 0, moduleId);
+
+    setUserMenuOrder(nextOrder);
+    setDraggingModuleId(null);
+    setDropIndicator(null);
+    currentDropIndicator.current = null;
+
+    // Persistência local mantém a preferência disponível quando a API estiver indisponível.
+    if (localOrderKey) {
+      try { localStorage.setItem(localOrderKey, JSON.stringify(nextOrder)); } catch {}
+    }
+
+    if (!isConfigApiEnabled()) return;
+    try {
+      await configApi.updateUserMenuOrder(nextOrder);
+    } catch {
+      showToast('Ordem salva neste navegador; a sincronização da preferência pessoal falhou.');
+    }
+  };
+
+  // Em API real, o store já recupera a preferência do usuário e usa localStorage só como fallback.
+  useEffect(() => {
+    if (!localOrderKey || isConfigApiEnabled()) return;
+    try {
+      const saved = localStorage.getItem(localOrderKey);
+      if (saved) {
+        const parsed: string[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setUserMenuOrder(parsed);
+        }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localOrderKey]);
+
+  const movePointerDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = pointerDrag.current;
+    if (!drag || (!drag.active && Math.abs(event.clientY - drag.startY) < 5)) return;
+    if (!drag.active) {
+      drag.active = true;
+      setDraggingModuleId(drag.id);
+    }
+    event.preventDefault();
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[id^="sidebar-item-"]');
+    const targetId = target?.id.replace('sidebar-item-', '');
+    if (!target || !targetId || targetId === drag.id) return;
+    const bounds = target.getBoundingClientRect();
+    const indicator = { id: targetId, edge: event.clientY < bounds.top + bounds.height / 2 ? 'before' as const : 'after' as const };
+    currentDropIndicator.current = indicator;
+    setDropIndicator(indicator);
+  };
+
+  const finishPointerDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = pointerDrag.current;
+    if (!drag) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    pointerDrag.current = null;
+    if (drag.active) {
+      suppressModuleClick.current = true;
+      const indicator = currentDropIndicator.current;
+      if (indicator) void dropModule(drag.id, indicator.id, indicator.edge);
+      else setDraggingModuleId(null);
+      setDropIndicator(null);
+      currentDropIndicator.current = null;
+      window.setTimeout(() => { suppressModuleClick.current = false; }, 0);
+    }
+  };
+
+  const dragClasses = (id: string) => {
+    const indicator = dropIndicator?.id === id
+      ? dropIndicator.edge === 'before'
+        ? 'before:absolute before:inset-x-1 before:-top-1 before:h-0.5 before:rounded-full before:bg-blue-500'
+        : 'after:absolute after:inset-x-1 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-blue-500'
+      : '';
+    return `relative transition-all duration-200 ease-out motion-reduce:transition-none ${indicator}`;
+  };
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({
@@ -45,6 +182,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isAnalisesActive = currentTab.startsWith('analises-') && !isMarketplaceActive;
   const isAdsActive = currentTab.startsWith('ads-');
   const isSimuladoresActive = currentTab.startsWith('simuladores-');
+  const isMensagensActive = currentTab.startsWith('mensagens-');
+  const hiddenStaffScreenStyle = (screenId: string) =>
+    isStaff && !isStaffLibraryScreenEnabled(screenId) ? { display: 'none' } : undefined;
 
   return (
     <aside 
@@ -143,13 +283,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Sidebar Navigation */}
-      <div className="flex-1 py-4 overflow-y-auto px-3 space-y-4">
+      <div className="flex flex-1 flex-col py-4 overflow-y-auto px-3 space-y-4">
+        {isStaff && (
+        <>
         
         {/* SECTION 1: APRESENTAÇÃO / OBSERVE */}
         <div className="space-y-1">
           {!collapsed && (
             <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Observe
+              Laboratorio Mock
             </p>
           )}
 
@@ -181,7 +323,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   { id: 'analises-region', label: 'Análise Regional (UFs)' },
                   { id: 'analises-performance', label: 'Metas & Desempenho' },
                   { id: 'analises-mapa', label: 'Mapa de Vendas' }
-                ].map(item => {
+                ].filter(item => isStaffLibraryScreenEnabled(item.id)).map(item => {
                   const isActive = currentTab === item.id;
                   return (
                     <button
@@ -227,7 +369,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   { id: 'analises-shopee', label: 'Shopee' },
                   { id: 'analises-mercadolivre', label: 'Mercado Livre' },
                   { id: 'analises-ifood', label: 'iFood' }
-                ].map(item => {
+                ].filter(item => isStaffLibraryScreenEnabled(item.id)).map(item => {
                   const isActive = currentTab === item.id;
                   return (
                     <button
@@ -273,7 +415,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   { id: 'financeiro-receber', label: 'Contas a Receber' },
                   { id: 'financeiro-conciliacao', label: 'Conciliação Bancária' },
                   { id: 'financeiro-dre', label: 'DRE Gerencial' }
-                ].map(item => {
+                ].filter(item => isStaffLibraryScreenEnabled(item.id)).map(item => {
                   const isActive = currentTab === item.id;
                   return (
                     <button
@@ -317,7 +459,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {[
                   { id: 'ads-meta', label: 'Meta Ads' },
                   { id: 'ads-google-analytics', label: 'Google Analytics' }
-                ].map(item => {
+                ].filter(item => isStaffLibraryScreenEnabled(item.id)).map(item => {
                   const isActive = currentTab === item.id;
                   return (
                     <button
@@ -339,7 +481,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* SECTION: COGNITIVO / AGENTE */}
-        <div className="space-y-1">
+        <div className="space-y-1" style={hiddenStaffScreenStyle('agente')}>
           {!collapsed && (
             <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
               Cognitivo
@@ -364,7 +506,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* SECTION 2: SIMULAÇÕES / SIMULATE */}
-        <div className="space-y-1">
+        <div className="space-y-1" style={hiddenStaffScreenStyle('simuladores-combos')}>
           {!collapsed && (
             <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
               Simulate
@@ -394,7 +536,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
                 {[
                   { id: 'simuladores-combos', label: 'Simulador de Combos' }
-                ].map(item => {
+                ].filter(item => isStaffLibraryScreenEnabled(item.id)).map(item => {
                   const isActive = currentTab === item.id;
                   return (
                     <button
@@ -415,11 +557,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* SECTION 3: CADASTROS / BUILD */}
-        <div className="space-y-1">
+        <div className="space-y-1" style={hiddenStaffScreenStyle('mensagens-disparos-whatsapp')}>
           {!collapsed && (
             <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Build
+              Comunicação
+            </p>
+          )}
+          <div>
+            <button
+              onClick={() => !collapsed && toggleSection('mensagens')}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
+                isMensagensActive ? 'text-slate-900 bg-slate-50/50' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <MessageCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                {!collapsed && <span>Mensagens</span>}
+              </div>
+              {!collapsed && (openSections.mensagens ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />)}
+            </button>
+            {openSections.mensagens && !collapsed && (
+              <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
+                <button
+                  onClick={() => setCurrentTab('mensagens-disparos-whatsapp')}
+                  className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${currentTab === 'mensagens-disparos-whatsapp' ? 'text-blue-600 font-bold bg-blue-50/40' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'}`}
+                >
+                  Disparos no WhatsApp
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* SECTION 3: CADASTROS / BUILD */}
+        <div className="space-y-1" style={hiddenStaffScreenStyle('workspace-dados')}>
+          {!collapsed && (
+            <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Producao
             </p>
           )}
 
@@ -428,14 +602,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => !collapsed && toggleSection('cadastros')}
               className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
-                currentTab === 'cadastros' 
+                currentTab === 'cadastros' || currentTab === 'workspace-dados'
                   ? 'text-slate-900 bg-slate-50/50' 
                   : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center space-x-2.5">
                 <Database className="w-4 h-4 text-slate-500 shrink-0" />
-                {!collapsed && <span>Base de Dados</span>}
+                {!collapsed && <span>Dados do Cliente</span>}
               </div>
               {!collapsed && (
                 openSections.cadastros ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -444,6 +618,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {openSections.cadastros && !collapsed && (
               <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
+                <button
+                  onClick={() => setCurrentTab('workspace-dados')}
+                  className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                    currentTab === 'workspace-dados' 
+                      ? 'text-blue-600 font-bold bg-blue-50/40' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
+                  }`}
+                >
+                  Workspace de Dados
+                </button>
                 <button
                   onClick={() => setCurrentTab('cadastros')}
                   className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
@@ -459,11 +643,90 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
+        {/* Group: Dynamic IA Modules */}
+        </>
+        )}
+
+        {!isStaff && visibleUserModules.filter(m => m.id !== 'mod-base-dados').length === 0 && !collapsed && !isTenantMaster && (
+          <div className="px-2.5 py-3 text-xs text-slate-500 leading-5">
+            Nenhuma tela publicada para este cliente.
+          </div>
+        )}
+        {!isStaff && visibleUserModules.filter(m => m.id !== 'mod-base-dados').map(mod => {
+          const isSectionOpen = !!openSections[mod.id];
+          const hasActiveTab = mod.screens.some(s => s.id === currentTab);
+          
+          return (
+            <div
+              key={mod.id}
+              id={`sidebar-item-${mod.id}`}
+              style={{ order: menuPosition(mod.id) }}
+              className={`${dragClasses(mod.id)} space-y-1 rounded-md border border-transparent ${canReorder && !collapsed ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingModuleId === mod.id ? 'scale-[0.98] opacity-45' : ''}`}
+            >
+              <button
+                onPointerDown={(event) => {
+                  if (!canReorder || collapsed || event.button !== 0) return;
+                  pointerDrag.current = { id: mod.id, startY: event.clientY, active: false };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerMove={movePointerDrag}
+                onPointerUp={finishPointerDrag}
+                onPointerCancel={finishPointerDrag}
+                onClick={() => {
+                  if (!collapsed && !suppressModuleClick.current) toggleSection(mod.id);
+                }}
+                className={`w-full touch-none flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-semibold transition-all ${
+                  hasActiveTab
+                    ? 'text-slate-900 bg-slate-50/50' 
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  {canReorder && !collapsed && <GripVertical className="h-4 w-4 shrink-0 text-slate-300 hover:text-slate-500 cursor-grab" aria-hidden="true" />}
+                  {mod.icon === 'ShoppingBag' && <ShoppingBag className="w-4 h-4 text-slate-500 shrink-0" />}
+                  {mod.icon === 'TrendingUp' && <TrendingUp className="w-4 h-4 text-slate-500 shrink-0" />}
+                  {mod.icon === 'Globe' && <Globe className="w-4 h-4 text-slate-500 shrink-0" />}
+                  {mod.icon === 'FileText' && <FileText className="w-4 h-4 text-slate-500 shrink-0" />}
+                  {mod.icon !== 'ShoppingBag' && mod.icon !== 'TrendingUp' && mod.icon !== 'Globe' && mod.icon !== 'FileText' && <Folder className="w-4 h-4 text-slate-500 shrink-0" />}
+                  {!collapsed && <span>{mod.label}</span>}
+                </div>
+                {!collapsed && (
+                  isSectionOpen ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                )}
+              </button>
+
+              {isSectionOpen && !collapsed && (
+                <div className="ml-4 pl-3.5 border-l border-slate-200 mt-1 space-y-1">
+                  {mod.screens.map(scr => (
+                    <button
+                      key={scr.id}
+                      onClick={() => setCurrentTab(scr.id)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-xs transition-all ${
+                        currentTab === scr.id 
+                          ? 'text-blue-600 font-bold bg-blue-50/40' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
+                      }`}
+                    >
+                      {scr.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {(isStaff || isTenantMaster) && (
+        <>
         {/* SECTION 4: AJUSTES */}
-        <div className="space-y-1">
+        <div
+          id="sidebar-item-configuracoes"
+          style={{ order: menuPosition('configuracoes') }}
+          className={`${dragClasses('configuracoes')} space-y-1`}
+        >
           {!collapsed && (
             <p className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Ajustes
+              {isStaff ? 'Publicação' : 'Administração'}
             </p>
           )}
 
@@ -496,12 +759,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/70'
                   }`}
                 >
-                  Preferências
+                  {isStaff ? 'Preferências' : 'Configurações'}
                 </button>
               </div>
             )}
           </div>
         </div>
+        </>
+        )}
 
       </div>
 
@@ -513,12 +778,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5 rotate-90" />}
       </button>
 
-      {/* Footer Status */}
-      <div className="p-4 border-t border-slate-100">
-        <div className="flex items-center space-x-2 text-slate-400 hover:text-slate-600 transition-colors">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-          {!collapsed && <span className="text-[10px] font-bold tracking-wider uppercase">Ambiente Seguro</span>}
-        </div>
+      {/* Account menu: fixed at the sidebar footer, following the chat-app interaction model. */}
+      <div className="relative border-t border-slate-100 p-3">
+        {accountMenuOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
+            <div className={`absolute bottom-full z-50 mb-2 rounded-xl border border-slate-200 bg-white p-2 shadow-xl ${collapsed ? 'left-2 w-60' : 'left-3 right-3'}`}>
+              {!collapsed && <div className="border-b border-slate-100 px-2 py-2.5"><p className="truncate text-sm font-bold text-slate-800">{currentUser?.name}</p><p className="mt-0.5 truncate text-[10px] text-slate-400">{currentUser?.email}</p></div>}
+              <button type="button" onClick={() => { setAccountMenuOpen(false); onOpenAccount(); }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"><CircleUserRound className="h-4 w-4 text-slate-500" />Minha conta</button>
+              {(isStaff || isTenantMaster) && <button type="button" onClick={() => { setAccountMenuOpen(false); setCurrentTab('configuracoes'); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"><Sliders className="h-4 w-4 text-slate-500" />{isStaff ? 'Painel de controle' : 'Gestão de usuários'}</button>}
+              {isStaff && <button type="button" onClick={() => { const enabled = isConfigApiEnabled(); localStorage.setItem('bhs_config_api_enabled', enabled ? 'false' : 'true'); localStorage.removeItem('bhs_auth_token'); clearTenantDataCache(); window.location.reload(); }} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold ${isConfigApiEnabled() ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'}`}><Database className="h-4 w-4" />{isConfigApiEnabled() ? 'Ativar modo mockado' : 'Conectar à API real'}</button>}
+              <div className="my-1 border-t border-slate-100" />
+              <button type="button" onClick={() => { setAccountMenuOpen(false); onLogout(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-bold text-rose-600 hover:bg-rose-50"><LogOut className="h-4 w-4" />Sair</button>
+            </div>
+          </>
+        )}
+        <button type="button" onClick={() => setAccountMenuOpen((open) => !open)} className={`flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-slate-50 ${collapsed ? 'justify-center' : ''}`} title={currentUser?.name ?? 'Minha conta'}>
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-xs font-bold text-blue-700">{currentUser?.is_staff ? 'BHS' : (currentUser?.name ?? 'U').slice(0, 2).toUpperCase()}<span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" /></span>
+          {!collapsed && <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold text-slate-700">{currentUser?.name}</span><span className="block truncate text-[10px] text-slate-400">Minha conta</span></span>}
+          {!collapsed && <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+        </button>
       </div>
     </aside>
   );

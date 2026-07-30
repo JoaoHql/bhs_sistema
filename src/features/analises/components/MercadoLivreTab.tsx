@@ -5,6 +5,7 @@ import {
   BarChart, Bar, Legend, PieChart, Pie, Cell, Line, ComposedChart, RadialBarChart, RadialBar, LabelList, AreaChart, Area
 } from 'recharts';
 import { DollarSign, ShieldCheck, Megaphone, AlertCircle, TrendingUp } from 'lucide-react';
+import { formatSpecializedCompactCurrency, formatSpecializedCurrency as formatBRL, formatSpecializedNumber as formatNumber } from '../../../utils/chartLabels';
 
 const COLORS = ['#3483fa', '#00a650', '#ffc010', '#b91c1c', '#8b5cf6'];
 
@@ -16,15 +17,6 @@ export const MercadoLivreTab: React.FC = () => {
     const totalSales = filteredCustomers.reduce((acc, c) => acc + c.value, 0);
     return Math.max(0.05, totalSales / 5000000);
   }, [filteredCustomers]);
-
-  // Format Helper
-  const formatBRL = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
-  };
-
-  const formatNumber = (val: number) => {
-    return new Intl.NumberFormat('pt-BR').format(val);
-  };
 
   // KPIs
   const kpis = useMemo(() => {
@@ -380,7 +372,7 @@ export const MercadoLivreTab: React.FC = () => {
                 />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '9.5px', paddingTop: '5px' }} />
                 <Bar yAxisId="left" dataKey="Investimento" name="Investido em Ads" fill="#ffc010" radius={[3, 3, 0, 0]} barSize={18}>
-                  <LabelList dataKey="Investimento" position="top" formatter={(v: any) => `R$${Math.round(Number(v)/1000)}k`} style={{ fill: '#475569', fontSize: 7.5, fontWeight: 'bold' }} />
+                  <LabelList dataKey="Investimento" position="top" formatter={formatSpecializedCompactCurrency} style={{ fill: '#475569', fontSize: 7.5, fontWeight: 'bold' }} />
                   {adsEvolutionData.map((entry, index) => {
                     const isSelected = searchQuery === entry.name;
                     return (

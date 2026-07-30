@@ -25,17 +25,32 @@ const createMockSnapshot = (): DashboardDataSnapshot => ({
   lastUpdated: '15:10:00',
 });
 
+const createEmptySnapshot = (): DashboardDataSnapshot => ({
+  customers: [],
+  metas: [],
+  users: [],
+  syncLogs: [],
+  lastUpdated: '',
+});
+
 const getApiUrl = () => import.meta.env.VITE_DASHBOARD_API_URL || '/api/dashboard';
 
 const normalizeSnapshot = (payload: Partial<DashboardDataSnapshot>): DashboardDataSnapshot => {
-  const fallback = createMockSnapshot();
+  if (
+    !Array.isArray(payload.customers) ||
+    !Array.isArray(payload.metas) ||
+    !Array.isArray(payload.users) ||
+    !Array.isArray(payload.syncLogs)
+  ) {
+    throw new Error('Payload da API incompleto.');
+  }
 
   return {
-    customers: Array.isArray(payload.customers) ? payload.customers as Customer[] : fallback.customers,
-    metas: Array.isArray(payload.metas) ? payload.metas as Meta[] : fallback.metas,
-    users: Array.isArray(payload.users) ? payload.users as User[] : fallback.users,
-    syncLogs: Array.isArray(payload.syncLogs) ? payload.syncLogs as SyncLog[] : fallback.syncLogs,
-    lastUpdated: typeof payload.lastUpdated === 'string' ? payload.lastUpdated : fallback.lastUpdated,
+    customers: payload.customers as Customer[],
+    metas: payload.metas as Meta[],
+    users: payload.users as User[],
+    syncLogs: payload.syncLogs as SyncLog[],
+    lastUpdated: typeof payload.lastUpdated === 'string' ? payload.lastUpdated : '',
   };
 };
 
@@ -44,7 +59,8 @@ export const getInitialDataMode = (): DataMode => {
   if (persisted === 'mock' || persisted === 'api') return persisted;
 
   const envMode = import.meta.env.VITE_DATA_MODE;
-  return envMode === 'api' ? 'api' : 'mock';
+  if (envMode === 'api' || import.meta.env.VITE_CONFIG_API_ENABLED === 'true') return 'api';
+  return 'mock';
 };
 
 export const persistDataMode = (mode: DataMode) => {
@@ -79,9 +95,9 @@ export const loadDashboardData = async (mode: DataMode): Promise<DashboardDataRe
     };
   } catch {
     return {
-      snapshot: createMockSnapshot(),
-      status: 'fallback',
-      message: 'API indisponível. Fallback para mock aplicado.',
+      snapshot: createEmptySnapshot(),
+      status: 'error',
+      message: 'API indisponivel. Mock nao aplicado automaticamente.',
     };
   }
 };

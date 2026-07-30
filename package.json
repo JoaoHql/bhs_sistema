@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:chart-labels": "node --experimental-strip-types scripts/test_chart_labels.mjs",
+    "test:specialized-dashboards": "node scripts/test_specialized_dashboards.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
     "@tailwindcss/vite": "^4.3.1",
     "lucide-react": "^1.21.0",
     "react": "^19.2.5",
