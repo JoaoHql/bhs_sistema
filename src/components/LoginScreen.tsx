@@ -61,7 +61,7 @@ export function LoginScreen() {
             <div className="inline-flex items-center justify-center p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-4 text-blue-400">
               <Lock className="w-6 h-6 animate-pulse" />
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Portal Antigravity</h1>
+            <h1 className="text-2xl font-bold text-white tracking-tight">BHS Sistemas</h1>
             <p className="text-slate-400 text-sm mt-2">
               Gestão de Visões e Governança do Sistema
             </p>

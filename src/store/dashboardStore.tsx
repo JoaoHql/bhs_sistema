@@ -1,8 +1,9 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Customer, DataMode, DataStatus, Meta, RFVCluster, SyncLog, User, WorkspaceSource, FieldDataType, WorkspaceField, WorkspaceType, ConnectionParams, ChartConfig, AppModule, CalculatedField, QueryFilterValue, BackendUser, AppScreen, ScreenFilterConfig } from '../types';
 
 import { getInitialDataMode, loadDashboardData, persistDataMode, syncDashboardData } from '../services/dashboardData';
 import { configApi, isConfigApiEnabled } from '../services/configApi';
+import { ApiClientError } from '../services/apiClient';
 import { invalidateTenantScreen, tenantSessionKey } from '../services/tenantDataCache';
 
 interface DashboardContextType {
@@ -67,6 +68,9 @@ interface DashboardContextType {
   // Admin & Preview State
   currentUser: BackendUser | null;
   setCurrentUser: (user: BackendUser | null) => void;
+  configurationStatus: 'idle' | 'loading' | 'ready' | 'error';
+  configurationStatusMessage: string;
+  retryConfiguration: () => void;
   previewMode: boolean;
   setPreviewMode: (mode: boolean) => void;
   previewConfig: { modules: AppModule[]; screens: AppScreen[] } | null;
@@ -239,7 +243,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>(initialWorkspaces);
   
   // Admin & Preview State
-  const [currentUser, setCurrentUser] = useState<BackendUser | null>(() => {
+  const [currentUser, setCurrentUserState] = useState<BackendUser | null>(() => {
     if (!isConfigApiEnabled()) {
       return {
         id: 'usr_demo_admin',
@@ -254,11 +258,41 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
     return null;
   });
+  const currentUserRef = useRef(currentUser);
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const [previewConfig, setPreviewConfig] = useState<{ modules: AppModule[]; screens: AppScreen[] } | null>(null);
   
   const [publishedModules, setPublishedModules] = useState<AppModule[]>(() => isConfigApiEnabled() ? [] : initialModules);
   const [userMenuOrder, setUserMenuOrder] = useState<string[]>([]);
+  const [configurationReloadVersion, setConfigurationReloadVersion] = useState(0);
+  const [configurationStatus, setConfigurationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(() =>
+    isConfigApiEnabled() && localStorage.getItem('bhs_auth_token') ? 'loading' : 'idle'
+  );
+  const [configurationStatusMessage, setConfigurationStatusMessage] = useState('Preparando seu acesso...');
+
+  const setCurrentUser = useCallback((user: BackendUser | null) => {
+    currentUserRef.current = user;
+    if (!user) {
+      setCurrentUserState(null);
+      setPublishedModules([]);
+      setUserMenuOrder([]);
+      setConfigurationStatus('idle');
+      return;
+    }
+
+    setConfigurationStatus(user.must_change_password ? 'idle' : 'loading');
+    setConfigurationStatusMessage('Carregando configuração do cliente...');
+    setCurrentUserState(user);
+    if (!user.must_change_password) {
+      setConfigurationReloadVersion((version) => version + 1);
+    }
+  }, []);
+
+  const retryConfiguration = useCallback(() => {
+    setConfigurationStatus('loading');
+    setConfigurationStatusMessage('Tentando carregar novamente...');
+    setConfigurationReloadVersion((version) => version + 1);
+  }, []);
   
   const userModules = useMemo(() => {
     if (currentUser?.is_staff) {
@@ -612,13 +646,19 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     if (!isConfigApiEnabled()) return;
 
+    if (!localStorage.getItem('bhs_auth_token')) return;
+
     let active = true;
 
     const loadConfiguration = async () => {
       try {
-        const user = await configApi.me();
+        setConfigurationStatus('loading');
+        const authenticatedUser = currentUserRef.current;
+        setConfigurationStatusMessage(authenticatedUser ? 'Carregando módulos publicados...' : 'Validando seu acesso...');
+        const user = authenticatedUser ?? await configApi.me();
         if (active) {
-          setCurrentUser(user);
+          currentUserRef.current = user;
+          setCurrentUserState(user);
           if (user.is_staff) {
             persistDataMode('mock');
             setDataModeState('mock');
@@ -627,11 +667,33 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         // A equipe usa a biblioteca mockada local; somente tenants carregam
         // manifestos publicados pela API.
-        const modules = user.is_staff ? [] : await configApi.modules();
+        setConfigurationStatusMessage('Carregando módulos publicados...');
+        let modules: AppModule[];
+        const moduleCacheKey = `bhs_published_modules_${user.id}`;
+        try {
+          modules = user.is_staff ? [] : await configApi.modules();
+          if (!user.is_staff) {
+            try { localStorage.setItem(moduleCacheKey, JSON.stringify(modules)); } catch { /* Cache is optional. */ }
+          }
+        } catch (error) {
+          if (error instanceof ApiClientError && (error.status === 401 || error.status === 403)) throw error;
+          let cachedModules: AppModule[] | null = null;
+          try {
+            const cached = localStorage.getItem(moduleCacheKey);
+            const parsed: unknown = cached ? JSON.parse(cached) : null;
+            if (Array.isArray(parsed)) cachedModules = parsed as AppModule[];
+          } catch { /* Invalid cache is ignored. */ }
+          if (!cachedModules) throw error;
+          modules = cachedModules;
+          showToast('Configuração atual indisponível. Exibindo última versão carregada.');
+        }
+
+        setConfigurationStatusMessage('Aplicando preferências do menu...');
         let menuOrder: string[] = [];
         try {
           menuOrder = (await configApi.userMenuOrder()).itemIds;
         } catch (error) {
+          if (error instanceof ApiClientError && error.status === 401) throw error;
           console.warn('Preferência pessoal do menu indisponível; usando a ordem local.', error);
         }
         if (active) {
@@ -647,16 +709,25 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 const parsed: string[] = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) setUserMenuOrder(parsed);
               }
-            } catch {}
+            } catch { /* Invalid local preference is ignored. */ }
           }
           setCurrentTab(prev => prev || pickInitialTab(user, modules));
+          setConfigurationStatus('ready');
+          setConfigurationStatusMessage('Painel pronto.');
         }
       } catch (error) {
         console.error('Erro ao carregar configuracao do backend:', error);
         if (active) {
-          setPublishedModules([]);
-          setCurrentTab('');
-          showToast('Backend de configuracao indisponivel. Nenhuma tela local foi carregada no runtime real.');
+          if (error instanceof ApiClientError && error.status === 401) {
+            localStorage.removeItem('bhs_auth_token');
+            currentUserRef.current = null;
+            setCurrentUserState(null);
+            setConfigurationStatus('idle');
+            showToast('Sua sessão expirou. Entre novamente.');
+            return;
+          }
+          setConfigurationStatus('error');
+          setConfigurationStatusMessage('Não foi possível carregar seu painel.');
         }
       }
     };
@@ -666,7 +737,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       active = false;
     };
-  }, [pickInitialTab]);
+  }, [configurationReloadVersion, pickInitialTab]);
 
   const setDataMode = (mode: DataMode) => {
     if (isConfigApiEnabled() && currentUser && !currentUser.is_staff) {
@@ -836,6 +907,9 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       
       currentUser,
       setCurrentUser,
+      configurationStatus,
+      configurationStatusMessage,
+      retryConfiguration,
       previewMode,
       setPreviewMode,
       previewConfig,

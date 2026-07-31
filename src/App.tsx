@@ -37,14 +37,56 @@ function EmptyTenantView() {
 }
 
 function DashboardContent() {
-  const { currentTab, setCurrentTab, currentUser, userModules } = useDashboard();
+  const {
+    currentTab,
+    setCurrentTab,
+    currentUser,
+    userModules,
+    configurationStatus,
+    configurationStatusMessage,
+    retryConfiguration,
+  } = useDashboard();
 
   if (!currentUser) {
+    if (configurationStatus === 'loading') {
+      return <TenantLoadingState label={configurationStatusMessage} />;
+    }
+    if (configurationStatus === 'error') {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div className="max-w-md text-center" role="alert">
+            <h1 className="text-xl font-bold text-slate-900">Painel temporariamente indisponível</h1>
+            <p className="mt-2 text-sm text-slate-500">{configurationStatusMessage}</p>
+            <button type="button" onClick={retryConfiguration} className="mt-5 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-500">
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      );
+    }
     return <LoginScreen />;
   }
 
   if (currentUser.must_change_password) {
     return <MandatoryPasswordChangeScreen />;
+  }
+
+  if (configurationStatus === 'loading') {
+    return <TenantLoadingState label={configurationStatusMessage} />;
+  }
+
+  if (configurationStatus === 'error') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md text-center" role="alert">
+          <h1 className="text-xl font-bold text-slate-900">Não foi possível carregar seu painel</h1>
+          <p className="mt-2 text-sm text-slate-500">{configurationStatusMessage}</p>
+          <button type="button" onClick={retryConfiguration} className="mt-5 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-500">
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const isStaff = !!currentUser.is_staff;
