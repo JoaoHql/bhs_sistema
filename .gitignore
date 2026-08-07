@@ -15,9 +15,15 @@ dist-ssr
 # Project-local secrets
 /backend/.env
 /backend/.env.local
+/integracao_supa/.env
 
 # Private SSH keys used only for local VPS access
 /vps/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
 
 # Editor directories and files
 .vscode/*

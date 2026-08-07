@@ -1,0 +1,28 @@
+[project]
+name = "bhs-modelo-backend"
+version = "0.1.0"
+description = "Backend foundation for BHS Modelo multi-client dashboards."
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "fastapi>=0.128.0",
+  "uvicorn[standard]>=0.38.0",
+  "pydantic-settings>=2.12.0",
+  "email-validator>=2.3.0",
+  "psycopg[binary]>=3.2.13",
+  "psycopg-pool>=3.2.6",
+  "mysql-connector-python>=9.0.0",
+  "PyYAML>=6.0.2",
+  "httpx>=0.28.0",
+  "redis>=6.4.0",
+  "python-jose[cryptography]>=3.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0.0",
+  "httpx>=0.28.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [".", ".."]
+testpaths = ["tests"]
