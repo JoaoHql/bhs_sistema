@@ -1,6 +1,10 @@
+const DEFAULT_TTL_MS = 5 * 60 * 1000;
+
 type CacheEntry<T> = {
   data?: T;
   promise?: Promise<T>;
+  timestamp: number;
+  ttlMs: number;
 };
 
 const cache = new Map<string, CacheEntry<unknown>>();
@@ -40,12 +44,24 @@ export const tenantCacheKey = (
   params: unknown,
 ) => `${sessionKey}|${screenId}|${resourceId}|${stableSerialize(params)}`;
 
-export const getCachedTenantData = <T>(key: string): T | undefined =>
-  cache.get(key)?.data as T | undefined;
+export const getCachedTenantData = <T>(key: string, ttlMs: number = DEFAULT_TTL_MS): T | undefined => {
+  const entry = cache.get(key) as CacheEntry<T> | undefined;
+  if (!entry?.data) return undefined;
+  if (Date.now() - entry.timestamp > (entry.ttlMs || ttlMs)) {
+    cache.delete(key);
+    return undefined;
+  }
+  return entry.data;
+};
 
-export const loadTenantData = <T>(key: string, loader: () => Promise<T>): Promise<T> => {
+export const loadTenantData = <T>(key: string, loader: () => Promise<T>, ttlMs: number = DEFAULT_TTL_MS): Promise<T> => {
   const current = cache.get(key) as CacheEntry<T> | undefined;
-  if (current?.data !== undefined) return Promise.resolve(current.data);
+  if (current?.data !== undefined) {
+    if (Date.now() - current.timestamp <= (current.ttlMs || ttlMs)) {
+      return Promise.resolve(current.data);
+    }
+    cache.delete(key);
+  }
   if (current?.promise) return current.promise;
 
   const generation = cacheGeneration;
@@ -54,7 +70,7 @@ export const loadTenantData = <T>(key: string, loader: () => Promise<T>): Promis
   const promise = loader()
     .then((data) => {
       if (cacheGeneration === generation && (keyVersions.get(key) ?? 0) === keyVersion) {
-        cache.set(key, { data });
+        cache.set(key, { data, timestamp: Date.now(), ttlMs });
       }
       return data;
     })
@@ -64,7 +80,7 @@ export const loadTenantData = <T>(key: string, loader: () => Promise<T>): Promis
     })
     .finally(() => updatePending(key, -1));
 
-  cache.set(key, { promise });
+  cache.set(key, { promise, timestamp: Date.now(), ttlMs });
   return promise;
 };
 

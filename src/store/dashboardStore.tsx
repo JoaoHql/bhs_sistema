@@ -669,7 +669,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         // manifestos publicados pela API.
         setConfigurationStatusMessage('Carregando módulos publicados...');
         let modules: AppModule[];
-        const moduleCacheKey = `bhs_published_modules_${user.id}`;
+        const moduleCacheKey = `bhs_published_modules_${user.client_slug ?? 'staff'}_${user.id}`;
         try {
           modules = user.is_staff ? [] : await configApi.modules();
           if (!user.is_staff) {

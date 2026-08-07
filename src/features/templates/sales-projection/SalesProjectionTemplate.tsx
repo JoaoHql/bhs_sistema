@@ -143,7 +143,7 @@ function ScenarioInput({
       <input
         aria-label={label}
         className={`flex-1 h-2 rounded-full cursor-pointer bg-slate-200 ${accentColor}`}
-        type="range" min="0" max="100" step="0.1" value={value}
+        type="range" min="-50" max="100" step="0.1" value={value}
         onChange={(e) => onChange(field, Number(e.target.value))}
       />
       <output className="w-16 text-right text-sm font-extrabold text-slate-900 shrink-0">{value.toFixed(2)}%</output>
@@ -326,13 +326,13 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
 
       {/* Cenários compactos */}
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-        <ScenarioInput label="Cenário positivo: Qtd. vendas subir" field="quantityGrowthPct"
+        <ScenarioInput label="Variação na qtd. vendas" field="quantityGrowthPct"
           value={data.scenario.quantityGrowthPct} onChange={data.onScenarioChange}
           icon={ShoppingCart} iconBg="bg-blue-50" iconColor="text-blue-600" accentColor="accent-blue-600" />
-        <ScenarioInput label="Cenário positivo: Ticket médio subir" field="revenueGrowthPct"
+        <ScenarioInput label="Variação no ticket médio" field="revenueGrowthPct"
           value={data.scenario.revenueGrowthPct} onChange={data.onScenarioChange}
           icon={Banknote} iconBg="bg-emerald-50" iconColor="text-emerald-600" accentColor="accent-emerald-600" />
-        <ScenarioInput label="Projetar aumento de meta" field="goalGrowthPct"
+        <ScenarioInput label="Variação na meta" field="goalGrowthPct"
           value={data.scenario.goalGrowthPct} onChange={data.onScenarioChange}
           icon={Target} iconBg="bg-purple-50" iconColor="text-purple-600" accentColor="accent-purple-600" />
       </section>

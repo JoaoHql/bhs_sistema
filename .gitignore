@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Project-local secrets
+/backend/.env
+/backend/.env.local
+
+# Private SSH keys used only for local VPS access
+/vps/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
