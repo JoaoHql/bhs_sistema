@@ -638,3 +638,31 @@ export interface MenuOrderResponse {
 export interface UserMenuOrderResponse {
   itemIds: string[];
 }
+
+export interface AreaUpdateStatus {
+  area: string;
+  label: string;
+  lastUpdatedAt: string | null;
+  rowsCount: number | null;
+  status: 'ok' | 'stale' | 'error';
+}
+
+export interface UpdateRun {
+  id: string;
+  area: string;
+  status: string;
+  trigger: string;
+  rowsAffected: number | null;
+  errorMessage: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface RefreshRequest {
+  area?: string | null;
+}
+
+export interface RefreshResponse {
+  run: UpdateRun;
+  areas: AreaUpdateStatus[];
+}

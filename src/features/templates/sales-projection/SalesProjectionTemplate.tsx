@@ -142,7 +142,7 @@ function ScenarioInput({
       <span className="text-xs font-bold text-slate-700 w-44 shrink-0 leading-tight">{label}</span>
       <input
         aria-label={label}
-        className={`flex-1 h-2 rounded-full cursor-pointer bg-slate-200 ${accentColor}`}
+        className={`flex-1 h-2 rounded-full cursor-pointer bg-slate-200 appearance-none range-slider-smooth ${accentColor}`}
         type="range" min="-50" max="100" step="0.1" value={value}
         onChange={(e) => onChange(field, Number(e.target.value))}
       />

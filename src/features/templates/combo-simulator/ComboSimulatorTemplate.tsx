@@ -362,7 +362,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
   })();
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-slate-50 p-6 md:p-8 space-y-6 overflow-y-auto pb-16">
+    <div className="flex-1 flex flex-col min-h-0 bg-slate-50 p-4 md:p-5 space-y-4 overflow-y-auto pb-8">
       
       {/* Header do Simulador */}
       <div className="flex justify-between items-start border-b border-slate-200 pb-4 shrink-0">
@@ -400,7 +400,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
           <Layers2 className="w-4 h-4 text-blue-600" />
           Resultados Finais da Simulação (Consolidado)
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Card 1: Faturamento Consolidado */}
           <div className="bg-white border-t-4 border-t-blue-500 border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
@@ -481,7 +481,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
           Simulação Conjunta / Ajustes em Lote
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
           
           {/* Ajustar Markup Alvo */}
           <div className="flex flex-col justify-between h-full min-h-[72px]">
@@ -573,7 +573,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
           <Briefcase className="w-4 h-4 text-blue-600" />
           Configuração de Margem por Item do Combo
         </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {products.map((product, idx) => {
             const effectiveCost = getEffectiveCost(product);
             const effectivePrice = getEffectivePrice(product);
@@ -753,7 +753,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
       </div>
 
       {/* SEÇÃO 4: SALVAR SIMULAÇÃO & HISTÓRICO */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
         {/* Formulário para Salvar */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 lg:col-span-1">
@@ -775,7 +775,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
             <button
               onClick={handleSaveSimulation}
               disabled={!newSimName.trim()}
-              className="w-full py-2 bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-blue-100"
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-blue-600/20"
             >
               <Save className="w-3.5 h-3.5" />
               Salvar Cenário

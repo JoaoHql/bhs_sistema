@@ -93,3 +93,48 @@
 .fade-transition {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
+
+/* Range slider suavizado — remove borda preta do thumb e track */
+.range-slider-smooth {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e2e8f0; /* slate-200 */
+  border-radius: 9999px;
+  outline: none;
+  border: none;
+}
+.range-slider-smooth::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: currentColor;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.range-slider-smooth::-webkit-slider-thumb:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  transform: scale(1.15);
+}
+.range-slider-smooth::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: currentColor;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.range-slider-smooth::-moz-range-thumb:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  transform: scale(1.15);
+}
+.range-slider-smooth::-moz-range-track {
+  background: #e2e8f0;
+  border-radius: 9999px;
+  border: none;
+}

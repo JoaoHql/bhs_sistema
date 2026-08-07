@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useDashboard } from '../store/dashboardStore';
 import { Sidebar } from './Sidebar';
-import { RefreshCw, Filter, X, Sparkles, HelpCircle, LogOut, Sliders, Database, CircleUserRound } from 'lucide-react';
+import { Filter, X, Sparkles, HelpCircle, LogOut, Sliders, Database, CircleUserRound } from 'lucide-react';
 import { AskAIDrawer } from '../components/shared/AskAIDrawer';
 import { ToastNotification } from '../components/shared/ToastNotification';
 import { clearTenantDataCache } from '../services/tenantDataCache';
@@ -34,9 +34,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     searchQuery,
     setSearchQuery,
     clearFilters,
-    isSyncing,
-    lastUpdated,
-    syncNow,
     setIsAskDrawerOpen,
     previewMode,
     setPreviewMode,
@@ -50,6 +47,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [accountOpen, setAccountOpen] = useState(false);
   const isStaff = !!currentUser?.is_staff;
   const isMessagesTab = currentTab.startsWith('mensagens-');
+  const isSimuladoresTab = currentTab.startsWith('simuladores-');
   const activeFilterConfig = screenFilterConfigs[currentTab];
   const periodFilter = activeFilterConfig?.period ?? {
     label: 'Periodo',
@@ -152,24 +150,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               {dataMode} · {dataStatus}
             </div>
 
-            {/* Sync Status / Action */}
-            <div className="flex items-center space-x-2.5 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-md border border-slate-200 shadow-sm">
-              <span className="flex h-2.5 w-2.5 relative">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isSyncing ? 'bg-orange-400' : 'bg-emerald-400'} opacity-75`}></span>
-                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isSyncing ? 'bg-orange-500' : 'bg-emerald-500'}`}></span>
-              </span>
-              <span className="font-medium">{isSyncing ? 'Sincronizando...' : `Última carga: ${lastUpdated}`}</span>
-              <button
-                onClick={syncNow}
-                disabled={isSyncing}
-                className="text-slate-500 hover:text-orange-600 transition-colors disabled:opacity-50 ml-1.5 cursor-pointer"
-                title="Atualizar dados agora"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-orange-500' : ''}`} />
-              </button>
-            </div>
 
-            {!isMessagesTab && <>
+            {!isMessagesTab && !isSimuladoresTab && <>
             {/* Period Dropdown */}
             <div className="flex items-center space-x-2">
               <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">{periodFilter.label}:</span>

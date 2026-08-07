@@ -17,7 +17,9 @@ import {
   FileText,
   GripVertical,
   CircleUserRound,
-  LogOut
+  LogOut,
+  Pencil,
+  Check
 } from 'lucide-react';
 import { configApi, isConfigApiEnabled } from '../services/configApi';
 import { isStaffLibraryScreenEnabled } from '../config/staffLibrary';
@@ -80,6 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     mensagens: true
   });
   const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [dropIndicator, setDropIndicator] = useState<{ id: string; edge: 'before' | 'after' } | null>(null);
   const pointerDrag = useRef<{ id: string; startY: number; active: boolean } | null>(null);
@@ -284,6 +287,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Navigation */}
       <div className="flex flex-1 flex-col py-4 overflow-y-auto px-3 space-y-4">
+        {/* Botão discreto para salvar ordem e sair do modo edição */}
+        {editMode && !collapsed && (
+          <div className="flex items-center justify-between px-2.5 py-2 bg-blue-50/60 border border-blue-200/60 rounded-lg">
+            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Modo edição</span>
+            <button
+              type="button"
+              onClick={() => setEditMode(false)}
+              className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-[10px] font-bold transition-colors cursor-pointer"
+            >
+              <Check className="w-3 h-3" />
+              Salvar ordem
+            </button>
+          </div>
+        )}
         {isStaff && (
         <>
         
@@ -661,17 +678,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               key={mod.id}
               id={`sidebar-item-${mod.id}`}
               style={{ order: menuPosition(mod.id) }}
-              className={`${dragClasses(mod.id)} space-y-1 rounded-md border border-transparent ${canReorder && !collapsed ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingModuleId === mod.id ? 'scale-[0.98] opacity-45' : ''}`}
+              className={`${dragClasses(mod.id)} space-y-1 rounded-md border border-transparent ${canReorder && editMode && !collapsed ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingModuleId === mod.id ? 'scale-[0.98] opacity-45' : ''}`}
             >
               <button
                 onPointerDown={(event) => {
-                  if (!canReorder || collapsed || event.button !== 0) return;
+                  if (!canReorder || !editMode || collapsed || event.button !== 0) return;
                   pointerDrag.current = { id: mod.id, startY: event.clientY, active: false };
                   event.currentTarget.setPointerCapture(event.pointerId);
                 }}
-                onPointerMove={movePointerDrag}
-                onPointerUp={finishPointerDrag}
-                onPointerCancel={finishPointerDrag}
+                onPointerMove={editMode ? movePointerDrag : undefined}
+                onPointerUp={editMode ? finishPointerDrag : undefined}
+                onPointerCancel={editMode ? finishPointerDrag : undefined}
                 onClick={() => {
                   if (!collapsed && !suppressModuleClick.current) toggleSection(mod.id);
                 }}
@@ -682,7 +699,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }`}
               >
                 <div className="flex items-center space-x-2.5">
-                  {canReorder && !collapsed && <GripVertical className="h-4 w-4 shrink-0 text-slate-300 hover:text-slate-500 cursor-grab" aria-hidden="true" />}
+                  {canReorder && editMode && !collapsed && <GripVertical className="h-4 w-4 shrink-0 text-slate-300 hover:text-slate-500 cursor-grab" aria-hidden="true" />}
                   {mod.icon === 'ShoppingBag' && <ShoppingBag className="w-4 h-4 text-slate-500 shrink-0" />}
                   {mod.icon === 'TrendingUp' && <TrendingUp className="w-4 h-4 text-slate-500 shrink-0" />}
                   {mod.icon === 'Globe' && <Globe className="w-4 h-4 text-slate-500 shrink-0" />}
@@ -787,6 +804,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {!collapsed && <div className="border-b border-slate-100 px-2 py-2.5"><p className="truncate text-sm font-bold text-slate-800">{currentUser?.name}</p><p className="mt-0.5 truncate text-[10px] text-slate-400">{currentUser?.email}</p></div>}
               <button type="button" onClick={() => { setAccountMenuOpen(false); onOpenAccount(); }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"><CircleUserRound className="h-4 w-4 text-slate-500" />Minha conta</button>
               {(isStaff || isTenantMaster) && <button type="button" onClick={() => { setAccountMenuOpen(false); setCurrentTab('configuracoes'); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"><Sliders className="h-4 w-4 text-slate-500" />{isStaff ? 'Painel de controle' : 'Gestão de usuários'}</button>}
+              {canReorder && !isStaff && <button type="button" onClick={() => { setAccountMenuOpen(false); setEditMode(true); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"><Pencil className="h-4 w-4 text-slate-500" />Editar menu</button>}
               {isStaff && <button type="button" onClick={() => { const enabled = isConfigApiEnabled(); localStorage.setItem('bhs_config_api_enabled', enabled ? 'false' : 'true'); localStorage.removeItem('bhs_auth_token'); clearTenantDataCache(); window.location.reload(); }} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold ${isConfigApiEnabled() ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'}`}><Database className="h-4 w-4" />{isConfigApiEnabled() ? 'Ativar modo mockado' : 'Conectar à API real'}</button>}
               <div className="my-1 border-t border-slate-100" />
               <button type="button" onClick={() => { setAccountMenuOpen(false); onLogout(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-bold text-rose-600 hover:bg-rose-50"><LogOut className="h-4 w-4" />Sair</button>
