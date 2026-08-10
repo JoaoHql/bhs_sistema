@@ -36,7 +36,7 @@ export const SalesProjectionTenantView: React.FC<Props> = ({ screenId }) => {
     setScreenFilterConfig(screenId, { period: { label: 'Mês', options: months, allLabel: 'Mês mais recente' }, branch: { label: 'Empresa', options: companies, allLabel: 'Todas empresas' } });
     return () => setScreenFilterConfig(screenId, null);
   }, [companies, months, screenId, setScreenFilterConfig]);
-  useEffect(() => { if (displayData?.month && period === 'All') setPeriod(displayData.month); }, [displayData?.month, period, setPeriod]);
+  useEffect(() => { if (displayData?.month && !months.some((item) => item.value === period)) setPeriod(displayData.month); }, [displayData?.month, months, period, setPeriod]);
   useEffect(() => { if (branch !== 'All' && companies.length > 0 && !companies.some((item) => item.value === branch)) setBranch('All'); }, [branch, companies, setBranch]);
 
   const onScenarioChange = useCallback((field: keyof SalesProjectionScenario, value: number) => {

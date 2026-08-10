@@ -5,6 +5,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { MandatoryPasswordChangeScreen } from './components/MandatoryPasswordChangeScreen';
 import { isStaffLibraryScreenEnabled } from './config/staffLibrary';
 import { TenantLoadingState } from './components/shared/TenantLoadingState';
+import { TenantLoadingModal } from './components/shared/TenantLoadingModal';
 
 const AnalisesView = lazy(() => import('./features/analises/views/AnalisesView').then(module => ({ default: module.AnalisesView })));
 const CadastrosView = lazy(() => import('./features/cadastros/views/CadastrosView').then(module => ({ default: module.CadastrosView })));
@@ -44,12 +45,20 @@ function DashboardContent() {
     userModules,
     configurationStatus,
     configurationStatusMessage,
+    configurationProgress,
+    retryMessage,
     retryConfiguration,
   } = useDashboard();
 
   if (!currentUser) {
     if (configurationStatus === 'loading') {
-      return <TenantLoadingState label={configurationStatusMessage} />;
+      return (
+        <TenantLoadingModal
+          label={configurationStatusMessage}
+          progress={configurationProgress}
+          retryMessage={retryMessage}
+        />
+      );
     }
     if (configurationStatus === 'error') {
       return (
@@ -72,7 +81,13 @@ function DashboardContent() {
   }
 
   if (configurationStatus === 'loading') {
-    return <TenantLoadingState label={configurationStatusMessage} />;
+    return (
+      <TenantLoadingModal
+        label={configurationStatusMessage}
+        progress={configurationProgress}
+        retryMessage={retryMessage}
+      />
+    );
   }
 
   if (configurationStatus === 'error') {

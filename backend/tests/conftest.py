@@ -8,6 +8,7 @@ from app.main import app
 from app.repositories.mock_config_repository import MockConfigRepository
 from app.repositories.mock_query_repository import MockQueryRepository
 from app.repositories.mock_user_repository import MockUserRepository
+from app.services.redis_service import RedisService
 
 
 @pytest.fixture()
@@ -27,6 +28,7 @@ def client(config_repository: MockConfigRepository) -> Generator[TestClient, Non
     app.dependency_overrides[get_user_repository] = lambda: MockUserRepository()
     try:
         with TestClient(app) as test_client:
+            app.state.redis_service = RedisService()
             yield test_client
     finally:
         app.dependency_overrides.pop(get_repository, None)

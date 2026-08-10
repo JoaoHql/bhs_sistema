@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { 
   Target, TrendingUp, ShoppingCart, Banknote, Users, DollarSign, 
-  Download, SlidersHorizontal, Check, ArrowUpDown, ChevronUp, ChevronDown 
+  Download, SlidersHorizontal, Check, ArrowUpDown, ChevronUp, ChevronDown, Info
 } from 'lucide-react';
 import type { SalesProjectionScenario, SalesProjectionTemplateData } from './types';
 
@@ -50,8 +50,8 @@ function Gauge({
     }
   }
 
-  const cx = 140; const cy = 120; const r = 105;
-  const SW = 24; // Espessura da barra
+  const cx = 140; const cy = 112; const r = 96;
+  const SW = 20; // Espessura da barra
 
   const [vx, vy]  = arcPoint(cx, cy, r, valuePct);
   const [dInX, dInY]   = arcPoint(cx, cy, r - (SW / 2) + 1, destPct);
@@ -60,7 +60,7 @@ function Gauge({
   const gradId = `gg-${title.replace(/\s+/g, '-').toLowerCase()}`;
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-xl px-5 pt-4 pb-3 shadow-sm hover:shadow-md transition-all flex flex-col items-center justify-between h-full">
+    <div className="bg-white border border-slate-200/80 rounded-xl px-4 pt-3 pb-2.5 shadow-sm hover:shadow-md transition-all flex flex-col items-center justify-between h-full">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between w-full mb-3">
         <div className="flex items-center space-x-2">
@@ -77,8 +77,8 @@ function Gauge({
       </div>
 
       {/* Container SVG Ampliado */}
-      <div className="relative w-full max-w-[280px] flex flex-col items-center justify-center">
-        <svg viewBox="0 0 280 135" className="w-full h-auto overflow-visible">
+      <div className="relative w-full max-w-[260px] flex flex-col items-center justify-center">
+        <svg viewBox="0 0 280 125" className="w-full h-auto overflow-visible">
           <defs>
             <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor={colorStart} />
@@ -118,7 +118,7 @@ function Gauge({
         </div>
       </div>
 
-      <div className="w-full mt-5 pt-3 border-t border-slate-100 flex justify-center">
+      <div className="w-full mt-3 pt-3 border-t border-slate-100 flex justify-center">
         <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">
           Máx. Velocímetro: <span className="font-bold text-slate-500">{format(maximum)}</span>
         </p>
@@ -271,7 +271,7 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
   };
 
   // Componente de Cabeçalho com suporte a Ordenação em 3 Estados + Redimensionamento por Arraste
-  const Th = ({ columnKey, label, align = 'right' }: { columnKey: string, label: string, align?: 'left' | 'right' }) => {
+  const Th = ({ columnKey, label, align = 'right', infoTooltip }: { columnKey: string, label: string, align?: 'left' | 'right', infoTooltip?: string }) => {
     const isSorted = sortConfig?.key === columnKey;
     const width = columnWidths[columnKey] || 130;
     const bgClass = isSorted ? '!bg-slate-700' : '!bg-[#0f172a] hover:!bg-slate-800';
@@ -283,6 +283,11 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
         onClick={() => requestSort(columnKey)}
       >
         <div className={`flex items-center ${align === 'left' ? 'justify-start' : 'justify-end'} pr-1`}>
+          {infoTooltip && (
+            <span className="inline-flex items-center mr-1 text-blue-300 hover:text-blue-100 transition-colors" title={infoTooltip}>
+              <Info className="w-3.5 h-3.5" />
+            </span>
+          )}
           <span className="truncate">{label}</span>
           {isSorted ? (
             sortConfig.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-blue-400 ml-1 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-blue-400 ml-1 shrink-0" />
@@ -415,12 +420,12 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
               <tr>
                 {visibleColumns.date                  && <Th columnKey="date" label="Data" align="left" />}
                 {visibleColumns.quantitySold          && <Th columnKey="quantitySold" label="Qtd de Vendas" />}
-                {visibleColumns.quantityProjected     && <Th columnKey="quantityProjected" label="Qtd. Proj Vendas" />}
+                {visibleColumns.quantityProjected     && <Th columnKey="quantityProjected" label="Qtd. Proj Vendas" infoTooltip="Projeção calculada com base na média histórica dos mesmos dias da semana (ex: sextas-feiras) para a empresa selecionada." />}
                 {visibleColumns.quantityCompletionPct && <Th columnKey="quantityCompletionPct" label="% Qtd Realizada" />}
                 {visibleColumns.revenue               && <Th columnKey="revenue" label="R$ Faturado" />}
-                {visibleColumns.revenueProjected      && <Th columnKey="revenueProjected" label="R$ Projetado" />}
+                {visibleColumns.revenueProjected      && <Th columnKey="revenueProjected" label="R$ Projetado" infoTooltip="Projeção financeira baseada no faturamento médio histórico dos mesmos dias da semana para a empresa selecionada." />}
                 {visibleColumns.revenueCompletionPct  && <Th columnKey="revenueCompletionPct" label="% P. Realizado" />}
-                {visibleColumns.goal                  && <Th columnKey="goal" label="Meta" />}
+                {visibleColumns.goal                  && <Th columnKey="goal" label="Meta" infoTooltip="Meta baseada no faturamento realizado no mesmo dia do ano anterior + variação da meta." />}
                 {visibleColumns.goalCompletionPct     && <Th columnKey="goalCompletionPct" label="% M. Realizada" />}
               </tr>
             </thead>
@@ -430,12 +435,12 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
                 <tr key={row.date} className="hover:bg-slate-50/80 transition-colors">
                   {visibleColumns.date                  && <td style={{ width: columnWidths.date, minWidth: columnWidths.date, maxWidth: columnWidths.date }} className="p-3 font-semibold text-slate-700 whitespace-nowrap truncate">{new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(`${row.date}T00:00:00Z`))}</td>}
                   {visibleColumns.quantitySold          && <td style={{ width: columnWidths.quantitySold, minWidth: columnWidths.quantitySold, maxWidth: columnWidths.quantitySold }} className="p-3 text-right text-slate-800 font-medium whitespace-nowrap truncate">{number.format(row.quantitySold)}</td>}
-                  {visibleColumns.quantityProjected     && <td style={{ width: columnWidths.quantityProjected, minWidth: columnWidths.quantityProjected, maxWidth: columnWidths.quantityProjected }} className="p-3 text-right font-semibold text-amber-900 bg-amber-50/30 whitespace-nowrap truncate">{row.quantityProjected == null ? '—' : number.format(row.quantityProjected)}</td>}
+                  {visibleColumns.quantityProjected     && <td style={{ width: columnWidths.quantityProjected, minWidth: columnWidths.quantityProjected, maxWidth: columnWidths.quantityProjected }} className="p-3 text-right font-semibold text-amber-900 bg-amber-50/30 whitespace-nowrap truncate" title={row.quantityProjected == null ? "Sem histórico prévio de vendas para este dia da semana nesta empresa" : `Média histórica do dia da semana: ${number.format(row.quantityProjected)} vendas`}>{row.quantityProjected == null ? '—' : number.format(row.quantityProjected)}</td>}
                   {visibleColumns.quantityCompletionPct && <td style={{ width: columnWidths.quantityCompletionPct, minWidth: columnWidths.quantityCompletionPct, maxWidth: columnWidths.quantityCompletionPct }} className="p-3 text-right whitespace-nowrap"><ProgressBarCell value={row.quantityCompletionPct} /></td>}
                   {visibleColumns.revenue               && <td style={{ width: columnWidths.revenue, minWidth: columnWidths.revenue, maxWidth: columnWidths.revenue }} className="p-3 text-right text-slate-800 font-medium whitespace-nowrap truncate">{money.format(row.revenue)}</td>}
-                  {visibleColumns.revenueProjected      && <td style={{ width: columnWidths.revenueProjected, minWidth: columnWidths.revenueProjected, maxWidth: columnWidths.revenueProjected }} className="p-3 text-right font-semibold text-amber-900 bg-amber-50/30 whitespace-nowrap truncate">{row.revenueProjected == null ? '—' : money.format(row.revenueProjected)}</td>}
+                  {visibleColumns.revenueProjected      && <td style={{ width: columnWidths.revenueProjected, minWidth: columnWidths.revenueProjected, maxWidth: columnWidths.revenueProjected }} className="p-3 text-right font-semibold text-amber-900 bg-amber-50/30 whitespace-nowrap truncate" title={row.revenueProjected == null ? "Sem histórico prévio de vendas para este dia da semana nesta empresa" : `Média histórica do dia da semana: ${money.format(row.revenueProjected)}`}>{row.revenueProjected == null ? '—' : money.format(row.revenueProjected)}</td>}
                   {visibleColumns.revenueCompletionPct  && <td style={{ width: columnWidths.revenueCompletionPct, minWidth: columnWidths.revenueCompletionPct, maxWidth: columnWidths.revenueCompletionPct }} className="p-3 text-right whitespace-nowrap"><ProgressBarCell value={row.revenueCompletionPct} /></td>}
-                  {visibleColumns.goal                  && <td style={{ width: columnWidths.goal, minWidth: columnWidths.goal, maxWidth: columnWidths.goal }} className="p-3 text-right text-slate-800 font-medium whitespace-nowrap truncate">{row.goal == null ? '—' : money.format(row.goal)}</td>}
+                  {visibleColumns.goal                  && <td style={{ width: columnWidths.goal, minWidth: columnWidths.goal, maxWidth: columnWidths.goal }} className="p-3 text-right text-slate-800 font-medium whitespace-nowrap truncate" title={row.goal == null ? "Sem histórico equivalente no mesmo dia do ano anterior para esta empresa" : `Meta baseada no mesmo dia do ano anterior`}>{row.goal == null ? '—' : money.format(row.goal)}</td>}
                   {visibleColumns.goalCompletionPct     && <td style={{ width: columnWidths.goalCompletionPct, minWidth: columnWidths.goalCompletionPct, maxWidth: columnWidths.goalCompletionPct }} className="p-3 text-right whitespace-nowrap"><ProgressBarCell value={row.goalCompletionPct} /></td>}
                 </tr>
               ))}
@@ -443,37 +448,10 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
           </table>
         </div>
 
-        {/* Rodapé da tabela com informações do mês e ações para expandir a View Report */}
-        <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-600 font-medium shrink-0 gap-2">
+        <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-600 font-medium shrink-0">
           <span>
             Mostrando todos os <strong className="text-slate-900">{sortedRows.length} dias do mês</strong> (View Report: {viewReportRows} registros visíveis antes do scroll)
           </span>
-          <div className="flex items-center space-x-2">
-            {viewReportRows < 15 && sortedRows.length > 7 && (
-              <button
-                onClick={() => setViewReportRows(15)}
-                className="px-3 py-1 bg-white hover:bg-slate-100 text-blue-600 font-bold border border-slate-200 rounded-lg shadow-2xs transition-all cursor-pointer"
-              >
-                Expandir View Report para 15 registros
-              </button>
-            )}
-            {viewReportRows < 30 && sortedRows.length > 15 && (
-              <button
-                onClick={() => setViewReportRows(30)}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-2xs transition-all cursor-pointer"
-              >
-                Expandir View Report (30 registros)
-              </button>
-            )}
-            {viewReportRows > 7 && (
-              <button
-                onClick={() => setViewReportRows(7)}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-500 font-semibold border border-slate-200 rounded-lg transition-all cursor-pointer"
-              >
-                Restaurar Padrão (7 registros)
-              </button>
-            )}
-          </div>
         </div>
 
         {summary.goalDays === 0 && (

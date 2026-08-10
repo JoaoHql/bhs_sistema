@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   getTenantScreenPending,
+  getTotalPendingCount,
   getCachedTenantData,
   loadTenantData,
   tenantCacheKey,
@@ -82,4 +83,8 @@ export const useTenantScreenActivity = (sessionKey: string, screenId: string) =>
     [screenId, sessionKey],
   );
   return useSyncExternalStore(subscribeTenantDataActivity, getSnapshot, getSnapshot);
+};
+
+export const useGlobalActivity = () => {
+  return useSyncExternalStore(subscribeTenantDataActivity, getTotalPendingCount, getTotalPendingCount);
 };

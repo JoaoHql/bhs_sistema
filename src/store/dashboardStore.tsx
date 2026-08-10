@@ -3,7 +3,7 @@ import type { Customer, DataMode, DataStatus, Meta, RFVCluster, SyncLog, User, W
 
 import { getInitialDataMode, loadDashboardData, persistDataMode, syncDashboardData } from '../services/dashboardData';
 import { configApi, isConfigApiEnabled } from '../services/configApi';
-import { ApiClientError } from '../services/apiClient';
+import { ApiClientError, subscribeApiRetry } from '../services/apiClient';
 import { invalidateTenantScreen, tenantSessionKey } from '../services/tenantDataCache';
 
 interface DashboardContextType {
@@ -70,6 +70,8 @@ interface DashboardContextType {
   setCurrentUser: (user: BackendUser | null) => void;
   configurationStatus: 'idle' | 'loading' | 'ready' | 'error';
   configurationStatusMessage: string;
+  configurationProgress: number;
+  retryMessage: string | null;
   retryConfiguration: () => void;
   previewMode: boolean;
   setPreviewMode: (mode: boolean) => void;
@@ -269,6 +271,14 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     isConfigApiEnabled() && localStorage.getItem('bhs_auth_token') ? 'loading' : 'idle'
   );
   const [configurationStatusMessage, setConfigurationStatusMessage] = useState('Preparando seu acesso...');
+  const [configurationProgress, setConfigurationProgress] = useState(0);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    return subscribeApiRetry((attempt, maxAttempts) => {
+      setRetryMessage(`Reconectando ao VPS... Tentativa ${attempt} de ${maxAttempts}`);
+    });
+  }, []);
 
   const setCurrentUser = useCallback((user: BackendUser | null) => {
     currentUserRef.current = user;
@@ -277,11 +287,15 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setPublishedModules([]);
       setUserMenuOrder([]);
       setConfigurationStatus('idle');
+      setConfigurationProgress(0);
+      setRetryMessage(null);
       return;
     }
 
     setConfigurationStatus(user.must_change_password ? 'idle' : 'loading');
     setConfigurationStatusMessage('Carregando configuração do cliente...');
+    setConfigurationProgress(10);
+    setRetryMessage(null);
     setCurrentUserState(user);
     if (!user.must_change_password) {
       setConfigurationReloadVersion((version) => version + 1);
@@ -291,6 +305,8 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const retryConfiguration = useCallback(() => {
     setConfigurationStatus('loading');
     setConfigurationStatusMessage('Tentando carregar novamente...');
+    setConfigurationProgress(15);
+    setRetryMessage(null);
     setConfigurationReloadVersion((version) => version + 1);
   }, []);
   
@@ -511,7 +527,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   // State for filters
-  const [period, setPeriod] = useState<string>('Jun/2026');
+  const [period, setPeriod] = useState<string>(() => (isConfigApiEnabled() ? 'All' : 'Jun/2026'));
   const [branch, setBranch] = useState<string>('All');
   const [region, setRegion] = useState<string>('All');
   const [cluster, setCluster] = useState<RFVCluster | 'All'>('All');
@@ -653,8 +669,11 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const loadConfiguration = async () => {
       try {
         setConfigurationStatus('loading');
+        setConfigurationProgress(15);
+        setRetryMessage(null);
+
         const authenticatedUser = currentUserRef.current;
-        setConfigurationStatusMessage(authenticatedUser ? 'Carregando módulos publicados...' : 'Validando seu acesso...');
+        setConfigurationStatusMessage(authenticatedUser ? 'Carregando módulos publicados...' : 'Validando seu acesso ao servidor...');
         const user = authenticatedUser ?? await configApi.me();
         if (active) {
           currentUserRef.current = user;
@@ -665,8 +684,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
         }
 
-        // A equipe usa a biblioteca mockada local; somente tenants carregam
-        // manifestos publicados pela API.
+        setConfigurationProgress(50);
         setConfigurationStatusMessage('Carregando módulos publicados...');
         let modules: AppModule[];
         const moduleCacheKey = `bhs_published_modules_${user.client_slug ?? 'staff'}_${user.id}`;
@@ -688,6 +706,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           showToast('Configuração atual indisponível. Exibindo última versão carregada.');
         }
 
+        setConfigurationProgress(75);
         setConfigurationStatusMessage('Aplicando preferências do menu...');
         let menuOrder: string[] = [];
         try {
@@ -712,8 +731,10 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             } catch { /* Invalid local preference is ignored. */ }
           }
           setCurrentTab(prev => prev || pickInitialTab(user, modules));
+          setConfigurationProgress(100);
           setConfigurationStatus('ready');
           setConfigurationStatusMessage('Painel pronto.');
+          setRetryMessage(null);
         }
       } catch (error) {
         console.error('Erro ao carregar configuracao do backend:', error);
@@ -723,11 +744,14 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             currentUserRef.current = null;
             setCurrentUserState(null);
             setConfigurationStatus('idle');
+            setConfigurationProgress(0);
+            setRetryMessage(null);
             showToast('Sua sessão expirou. Entre novamente.');
             return;
           }
           setConfigurationStatus('error');
           setConfigurationStatusMessage('Não foi possível carregar seu painel.');
+          setRetryMessage(null);
         }
       }
     };
@@ -909,6 +933,8 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setCurrentUser,
       configurationStatus,
       configurationStatusMessage,
+      configurationProgress,
+      retryMessage,
       retryConfiguration,
       previewMode,
       setPreviewMode,

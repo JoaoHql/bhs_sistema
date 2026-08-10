@@ -109,3 +109,11 @@ export const subscribeTenantDataActivity = (listener: () => void) => {
 
 export const getTenantScreenPending = (sessionKey: string, screenId: string) =>
   pendingByScreen.get(`${sessionKey}|${screenId}`) ?? 0;
+
+export const getTotalPendingCount = () => {
+  let total = 0;
+  for (const count of pendingByScreen.values()) {
+    total += count;
+  }
+  return total;
+};

@@ -4,6 +4,8 @@ import { Sidebar } from './Sidebar';
 import { Filter, X, Sparkles, HelpCircle, LogOut, Sliders, Database, CircleUserRound } from 'lucide-react';
 import { AskAIDrawer } from '../components/shared/AskAIDrawer';
 import { ToastNotification } from '../components/shared/ToastNotification';
+import { GlobalTopLoader } from '../components/shared/GlobalTopLoader';
+import { useGlobalActivity } from '../hooks/useTenantData';
 import { clearTenantDataCache } from '../services/tenantDataCache';
 import { isConfigApiEnabled } from '../services/configApi';
 import { AccountDialog } from '../components/account/AccountDialog';
@@ -19,6 +21,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   setCurrentTab,
   children
 }) => {
+  const pendingCount = useGlobalActivity();
   const {
     dataMode,
     dataStatus,
@@ -93,6 +96,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-slate-50 font-sans antialiased text-slate-900">
+      <GlobalTopLoader isLoading={pendingCount > 0} />
       {/* Sidebar - Cloudflare Format */}
       <Sidebar 
         currentTab={currentTab} 

@@ -487,6 +487,20 @@ class QueryRepository:
                     )
 
                 rows = conn.execute(sql, params).fetchall()
+                if len(rows) != len({row["sales_date"] for row in rows}):
+                    merged: dict[str, dict[str, object]] = {}
+                    for row in rows:
+                        key = row["sales_date"]
+                        prev = merged.get(key)
+                        if prev is None:
+                            merged[key] = dict(row)
+                        else:
+                            merged[key] = {
+                                **row,
+                                "quantity_sold": int((prev.get("quantity_sold") or 0) + (row.get("quantity_sold") or 0)),
+                                "revenue": float((prev.get("revenue") or 0) + (row.get("revenue") or 0)),
+                            }
+                    rows = [merged[k] for k in sorted(merged.keys())]
             return {
                 "month": selected_month,
                 "months": [row["value"] for row in available_months],

@@ -57,8 +57,8 @@ def test_duplicate_whatsapp_test_does_not_call_provider_twice() -> None:
     service = WhatsAppService(repository, provider)  # type: ignore[arg-type]
     data = WhatsAppTestSendRequest(message="Teste")
 
-    first = asyncio.run(service.send_test(actor(), "11111111-1111-4111-8111-111111111111", data, idempotency_key="request-idempotency-001"))
-    repeated = asyncio.run(service.send_test(actor(), "11111111-1111-4111-8111-111111111111", data, idempotency_key="request-idempotency-001"))
+    first = asyncio.run(service.send_test(actor(), "11111111-1111-4111-8111-111111111111", data, idempotency_key="request-idempotency-001", tenant_schema="tenant_gelobel"))
+    repeated = asyncio.run(service.send_test(actor(), "11111111-1111-4111-8111-111111111111", data, idempotency_key="request-idempotency-001", tenant_schema="tenant_gelobel"))
 
     assert first.status == "sent"
     assert repeated.status == "sent"
