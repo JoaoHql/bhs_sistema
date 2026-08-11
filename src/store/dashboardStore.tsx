@@ -275,8 +275,8 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [retryMessage, setRetryMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    return subscribeApiRetry((attempt, maxAttempts) => {
-      setRetryMessage(`Reconectando ao VPS... Tentativa ${attempt} de ${maxAttempts}`);
+    return subscribeApiRetry(() => {
+      setRetryMessage('Estabilizando conexão com o sistema...');
     });
   }, []);
 
@@ -673,7 +673,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setRetryMessage(null);
 
         const authenticatedUser = currentUserRef.current;
-        setConfigurationStatusMessage(authenticatedUser ? 'Carregando módulos publicados...' : 'Validando seu acesso ao servidor...');
+        setConfigurationStatusMessage(authenticatedUser ? 'Carregando módulos publicados...' : 'Validando seu acesso...');
         const user = authenticatedUser ?? await configApi.me();
         if (active) {
           currentUserRef.current = user;

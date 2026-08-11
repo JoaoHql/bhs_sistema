@@ -24,6 +24,7 @@
 - Se uma suposicao mudar a superficie ou o fluxo pedido, pare e confirme antes de implementar.
 - Quando o usuario rejeitar uma interpretacao, remova completamente o escopo rejeitado antes de aplicar a correcao minima solicitada.
 - Modais e elementos de carregamento devem ser estritamente minimalistas, limpos e discretos (evite containers pesados, gradientes chamativos, banners escuros ou acúmulo de decorações).
+- Mensagens visíveis para o usuário final nunca podem expor termos técnicos de infraestrutura ou implementação (como VPS, Docker, Nginx, uvicorn, endpoints, contador de retentativas, etc.). Use sempre termos corporativos limpos e amigáveis (ex: "Estabilizando conexão...", "Carregando dados...").
 
 ## Protecao Contra Regressoes De Tenant
 
