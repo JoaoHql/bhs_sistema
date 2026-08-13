@@ -110,6 +110,7 @@ class SalesProjectionWeeklyResponse(SalesProjectionResponse):
     product_totals: list[dict] = Field(alias="productTotals")
     attendant_totals: list[dict] = Field(alias="attendantTotals")
     monthly_series: list[dict] = Field(alias="monthlySeries")
+    weekly_rows: list[dict] = Field(default_factory=list, alias="weeklyRows")
 
 
 @router.post("", response_model=QueryResponse)
@@ -361,6 +362,7 @@ async def sales_projection_weekly(
         raise NotFoundError("Tela nao encontrada.")
 
     cache_key = _query_cache_key(client_slug, "sales-projection-weekly", {
+        "v": 2,
         "month": request.month,
         "company": request.company,
         "quantityGrowthPct": request.quantity_growth_pct,

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { useDashboard } from '../../../store/dashboardStore';
 import { queryApi } from '../../../services/queryApi';
-import type { ComboSimulatorProductsResponse } from '../../../types';
+import type { ComboSimulatorProductsResponse, SavedComboSimulation } from '../../../types';
 import {
   ComboSimulatorTemplate,
   adaptGelobelComboProducts,
@@ -35,6 +35,14 @@ export const TenantComboSimulatorView: React.FC<TenantComboSimulatorViewProps> =
   });
   const rows = useMemo(() => response?.rows ?? [], [response]);
   const companies = useMemo(() => response?.companies ?? [], [response]);
+  const { data: savedSimulations = [] } = useTenantData<SavedComboSimulation[]>({
+    sessionKey,
+    screenId,
+    resourceId: 'combo-simulations',
+    params: { company: company ?? '' },
+    refreshVersion: screenRefreshVersion,
+    loader: () => company ? queryApi.comboSimulations({ screenId, company }) : Promise.resolve([]),
+  });
 
   const loadProducts = useCallback(async (search: string): Promise<ComboProductOption[]> => {
     if (!company) return [];
@@ -73,9 +81,29 @@ export const TenantComboSimulatorView: React.FC<TenantComboSimulatorViewProps> =
   }, [branch, companyOptions, setBranch]);
 
   const hasValidCompany = companyOptions.some((option) => option.value === company);
+  const createSavedSimulation = useCallback(async (input: {
+    name: string;
+    products: SavedComboSimulation['products'];
+  }) => {
+    if (!company) throw new Error('Empresa nao selecionada.');
+    return queryApi.createComboSimulation({ screenId, company, ...input });
+  }, [company, screenId]);
+
+  const deleteSavedSimulation = useCallback(async (id: string) => {
+    if (!company) throw new Error('Empresa nao selecionada.');
+    await queryApi.deleteComboSimulation({ screenId, company, id });
+  }, [company, screenId]);
+
   const data = useMemo(
-    () => buildGelobelComboSimulationData(rows, company ?? '', loadProducts),
-    [company, loadProducts, rows],
+    () => ({
+      ...buildGelobelComboSimulationData(rows, company ?? '', loadProducts),
+      persistence: {
+        savedSimulations,
+        createSavedSimulation,
+        deleteSavedSimulation,
+      },
+    }),
+    [company, createSavedSimulation, deleteSavedSimulation, loadProducts, rows, savedSimulations],
   );
 
   if (isLoading || (companies.length > 0 && !hasValidCompany)) {

@@ -21,4 +21,6 @@ export interface SalesProjectionTemplateData {
   scenario: SalesProjectionScenario;
   onScenarioChange: (field: keyof SalesProjectionScenario, value: number) => void;
   isRefreshing?: boolean;
+  /** Rótulo opcional exibido na coluna Data (ex.: "Semana 1"). Recebe a linha. */
+  rowLabel?: (row: SalesProjectionDay) => string;
 }

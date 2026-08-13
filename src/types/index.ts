@@ -240,6 +240,24 @@ export interface ComboSimulatorProductsResponse {
   rows: TenantComboProductRow[];
 }
 
+export interface SavedComboSimulationProduct {
+  id: string;
+  name: string;
+  qty: number;
+  cost: number;
+  price: number;
+  markup: number;
+  simulatedCost?: number | null;
+  simulatedPrice?: number | null;
+}
+
+export interface SavedComboSimulation {
+  id: string;
+  name: string;
+  createdAt: string;
+  products: SavedComboSimulationProduct[];
+}
+
 export interface SalesProjectionRow {
     sales_date: string;
     quantity_sold: number;
@@ -274,6 +292,18 @@ export interface SalesProjectionMonthlySeriesPoint {
   goal: number | null;
 }
 
+export interface SalesProjectionWeeklyRow {
+  week: number;
+  quantity_sold: number;
+  quantity_projected: number | null;
+  quantity_completion_pct: number | null;
+  revenue: number;
+  revenue_projected: number | null;
+  revenue_completion_pct: number | null;
+  goal: number | null;
+  goal_completion_pct: number | null;
+}
+
 export interface SalesProjectionWeeklyResponse extends SalesProjectionResponse {
   year: number | null;
   years: number[];
@@ -281,6 +311,7 @@ export interface SalesProjectionWeeklyResponse extends SalesProjectionResponse {
   productTotals: SalesProjectionAggregateRow[];
   attendantTotals: SalesProjectionAggregateRow[];
   monthlySeries: SalesProjectionMonthlySeriesPoint[];
+  weeklyRows: SalesProjectionWeeklyRow[];
 }
 
 export interface ScreenFilterOption {

@@ -325,11 +325,12 @@ class QueryRepository:
                         weekdays_scores_cte = f"""
                         previous_weekdays_scores as (
                           select dia_semana as dow,
-                                 quantidade_media as quantity_average,
-                                 receita_media    as revenue_average
+                                 sum(quantidade_media) as quantity_average,
+                                 sum(receita_media)    as revenue_average
                           from {quoted_schema}.mv_projecao_bases
                           where mes_referencia = to_char(to_date(%s || '-01', 'YYYY-MM-DD') - interval '1 month', 'YYYY-MM')
                             and (%s::text is null or empresa = %s::text)
+                          group by dia_semana
                         )"""
                         weekdays_scores_params = (selected_month, company, company)
                     else:
@@ -551,6 +552,7 @@ class QueryRepository:
                 "productTotals": [],
                 "attendantTotals": [],
                 "monthlySeries": [],
+                "weeklyRows": [],
             }
 
         try:
@@ -576,7 +578,132 @@ class QueryRepository:
                     for month_number in range(1, 13)
                 ],
             }
-        return {**base, **analytics}
+
+        try:
+            weekly_rows = await self._run(
+                lambda: self._fetch_sales_projection_weekly_rows(
+                    schema_name=schema_name,
+                    selected_month=selected_month,
+                    company=company,
+                    quantity_growth_pct=quantity_growth_pct,
+                    revenue_growth_pct=revenue_growth_pct,
+                    goal_growth_pct=goal_growth_pct,
+                    daily_rows=base.get("rows", []),
+                )
+            )
+        except (psycopg.Error, ServiceUnavailableError):
+            # A semente semanal e opcional: falha nunca bloqueia a tela.
+            weekly_rows = []
+        return {**base, **analytics, "weeklyRows": weekly_rows}
+
+    def _fetch_sales_projection_weekly_rows(
+        self,
+        *,
+        schema_name: str,
+        selected_month: str,
+        company: str | None,
+        quantity_growth_pct: float,
+        revenue_growth_pct: float,
+        goal_growth_pct: float,
+        daily_rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Calcula as semanas do mes selecionado com semente semanal (SBM).
+
+        Cada semana (dias 1-7, 8-14, 15-21, 22-28, 29+) tem a projecao calculada
+        pela media da MESMA posicao de semana nos 4 meses anteriores completos,
+        aplicando o cenario de crescimento. Nao soma projecoes diarias, evitando
+        a duplicacao da formula diaria dentro da semana.
+        """
+        quoted_schema = quote_identifier(schema_name, tenant_schema=True)
+        selected_date = date.fromisoformat(f"{selected_month}-01")
+        if selected_date.month == 12:
+            next_month = date(selected_date.year + 1, 1, 1)
+        else:
+            next_month = date(selected_date.year, selected_date.month + 1, 1)
+
+        seed_start = selected_date
+        for _ in range(4):
+            seed_start = (
+                date(seed_start.year - 1, 12, 1)
+                if seed_start.month == 1
+                else date(seed_start.year, seed_start.month - 1, 1)
+            )
+
+        with self._read_connection() as conn:
+            seed_rows = conn.execute(
+                f"""
+                select
+                  to_char(date_trunc('month', data_venda), 'YYYY-MM') as month,
+                  ((extract(day from data_venda)::int - 1) / 7)::int + 1 as week_position,
+                  sum(quantidade_vendida)::numeric(20,4) as quantity,
+                  sum(valor_faturado)::numeric(20,4) as revenue
+                from {quoted_schema}.projecao_vendas_diaria
+                where data_venda >= %s
+                  and data_venda < %s
+                  and (%s::text is null or empresa = %s::text)
+                group by 1, 2
+                """,
+                (seed_start, selected_date, company, company),
+            ).fetchall()
+
+        week_count = ((next_month - selected_date).days + 6) // 7
+        seeds_by_position: dict[int, list[dict[str, Any]]] = {}
+        for row in seed_rows:
+            seeds_by_position.setdefault(int(row["week_position"]), []).append(row)
+
+        weeks: list[dict[str, Any]] = []
+        for position in range(1, week_count + 1):
+            start_day = (position - 1) * 7 + 1
+            end_day = min(position * 7, (next_month - selected_date).days)
+            week_days = [
+                row
+                for row in daily_rows
+                if start_day <= int(row["sales_date"][-2:]) <= end_day
+            ]
+
+            quantity_sold = sum(float(row.get("quantity_sold") or 0) for row in week_days)
+            revenue = sum(float(row.get("revenue") or 0) for row in week_days)
+
+            goal_days = [row for row in week_days if row.get("goal") is not None]
+            goal = sum(float(row["goal"]) for row in goal_days) if goal_days else None
+            revenue_comparable_to_goal = sum(float(row.get("revenue") or 0) for row in goal_days)
+
+            seeds = seeds_by_position.get(position, [])
+            if seeds:
+                quantity_projected = (
+                    sum(float(s["quantity"]) for s in seeds) / len(seeds)
+                ) * (1 + quantity_growth_pct / 100.0)
+                revenue_projected = (
+                    sum(float(s["revenue"]) for s in seeds) / len(seeds)
+                ) * (1 + revenue_growth_pct / 100.0)
+            else:
+                quantity_projected = None
+                revenue_projected = None
+
+            weeks.append({
+                "week": position,
+                "quantity_sold": round(quantity_sold, 4),
+                "quantity_projected": round(quantity_projected, 4) if quantity_projected is not None else None,
+                "quantity_completion_pct": (
+                    round(quantity_sold / quantity_projected, 6)
+                    if quantity_projected
+                    else None
+                ),
+                "revenue": round(revenue, 4),
+                "revenue_projected": round(revenue_projected, 4) if revenue_projected is not None else None,
+                "revenue_completion_pct": (
+                    round(revenue / revenue_projected, 6)
+                    if revenue_projected
+                    else None
+                ),
+                "goal": round(goal, 4) if goal is not None else None,
+                "goal_completion_pct": (
+                    round(revenue_comparable_to_goal / goal, 6)
+                    if goal
+                    else None
+                ),
+            })
+        return weeks
 
     def _fetch_sales_projection_weekly_analytics(
         self,

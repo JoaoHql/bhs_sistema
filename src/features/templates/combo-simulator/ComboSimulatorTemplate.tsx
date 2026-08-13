@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import type { ComboProductOption, ComboSimulationData } from './types';
+import type { ComboProductOption, ComboSimulationData, SavedComboSimulation } from './types';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/ui/dialog';
 import { 
   Calculator, 
   Layers, 
@@ -15,7 +16,10 @@ import {
   FileSpreadsheet,
   Search,
   ChevronDown,
-  Check
+  Check,
+  History,
+  LoaderCircle,
+  AlertCircle,
 } from 'lucide-react';
 
 interface Product {
@@ -31,12 +35,7 @@ interface Product {
 
 type EditableProductField = 'qty' | 'cost' | 'price' | 'markup';
 
-interface SavedSimulation {
-  id: string;
-  name: string;
-  date: string;
-  products: Product[];
-}
+type SavedSimulation = SavedComboSimulation;
 
 const getEffectiveCost = (product: Product) => product.simulatedCost ?? product.cost;
 
@@ -93,8 +92,26 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
   const [jointQty, setJointQty] = useState<string>('');
 
   // States para simulações salvas
-  const [savedSimulations, setSavedSimulations] = useState<SavedSimulation[]>(() => readSavedSimulations(data.storageKey));
+  const [savedSimulations, setSavedSimulations] = useState<SavedSimulation[]>(
+    () => data.persistence?.savedSimulations ?? readSavedSimulations(data.storageKey),
+  );
   const [newSimName, setNewSimName] = useState<string>('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [isSavingSimulation, setIsSavingSimulation] = useState(false);
+  const [isDeletingSimulationId, setIsDeletingSimulationId] = useState<string | null>(null);
+  const [simulationError, setSimulationError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Auto-dismiss do feedback de sucesso após 4 segundos
+  useEffect(() => {
+    if (!successMessage) return;
+    const timeout = window.setTimeout(() => setSuccessMessage(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [successMessage]);
+
+  useEffect(() => {
+    if (data.persistence) setSavedSimulations(data.persistence.savedSimulations);
+  }, [data.persistence]);
 
   useEffect(() => {
     if (!data.searchCatalog || !openProductPickerId || !productSearch.trim()) {
@@ -243,20 +260,38 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
   };
 
   // Salvar Simulação
-  const handleSaveSimulation = () => {
+  const handleSaveSimulation = async () => {
     if (!newSimName.trim()) return;
 
-    const newSim: SavedSimulation = {
-      id: Date.now().toString(),
-      name: newSimName,
-      date: new Date().toLocaleDateString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      products: [...products]
-    };
-
-    const updated = [newSim, ...savedSimulations];
-    setSavedSimulations(updated);
-    localStorage.setItem(data.storageKey, JSON.stringify(updated));
-    setNewSimName('');
+    setSimulationError(null);
+    setSuccessMessage(null);
+    setIsSavingSimulation(true);
+    try {
+      if (data.persistence) {
+        const newSim = await data.persistence.createSavedSimulation({
+          name: newSimName.trim(),
+          products,
+        });
+        setSavedSimulations(current => [newSim, ...current]);
+      } else {
+        const newSim: SavedSimulation = {
+          id: Date.now().toString(),
+          name: newSimName.trim(),
+          createdAt: new Date().toISOString(),
+          products: [...products],
+        };
+        const updated = [newSim, ...savedSimulations];
+        setSavedSimulations(updated);
+        localStorage.setItem(data.storageKey, JSON.stringify(updated));
+      }
+      setNewSimName('');
+      setHistoryOpen(true);
+      setSuccessMessage('Cenário salvo com sucesso.');
+    } catch {
+      setSimulationError('Não foi possível salvar o cenário. Tente novamente.');
+    } finally {
+      setIsSavingSimulation(false);
+    }
   };
 
   // Carregar Simulação
@@ -272,11 +307,29 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
   };
 
   // Excluir Simulação
-  const handleDeleteSimulation = (id: string, e: React.MouseEvent) => {
+  const handleDeleteSimulation = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = savedSimulations.filter(s => s.id !== id);
-    setSavedSimulations(updated);
-    localStorage.setItem(data.storageKey, JSON.stringify(updated));
+    setSimulationError(null);
+    setSuccessMessage(null);
+    setIsDeletingSimulationId(id);
+    try {
+      if (data.persistence) await data.persistence.deleteSavedSimulation(id);
+      const updated = savedSimulations.filter(s => s.id !== id);
+      setSavedSimulations(updated);
+      if (!data.persistence) localStorage.setItem(data.storageKey, JSON.stringify(updated));
+      setSuccessMessage('Cenário excluído com sucesso.');
+    } catch {
+      setSimulationError('Não foi possível excluir o cenário. Tente novamente.');
+    } finally {
+      setIsDeletingSimulationId(null);
+    }
+  };
+
+  const formatSavedSimulationDate = (value: string) => {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(parsed);
   };
 
   // Exportar Excel (CSV)
@@ -385,6 +438,15 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
             Exportar CSV
           </button>
           <button
+            onClick={() => setHistoryOpen(true)}
+            disabled={isSavingSimulation || isDeletingSimulationId !== null}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-slate-300 bg-white rounded-lg text-xs font-bold text-slate-700 transition-all hover:shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Ver histórico completo de cenários salvos"
+          >
+            <History className="w-4 h-4 text-blue-600" />
+            Ver Histórico
+          </button>
+          <button
             onClick={handleReset}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-slate-300 bg-white rounded-lg text-xs font-bold text-slate-600 transition-all hover:shadow-sm cursor-pointer"
           >
@@ -393,6 +455,25 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
           </button>
         </div>
       </div>
+
+      {/* Feedback de sucesso / erro nas operações de salvar e excluir */}
+      {(successMessage || simulationError) && (
+        <div
+          role="status"
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold border transition-all animate-in fade-in ${
+            successMessage
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          {successMessage ? (
+            <Check className="w-4 h-4 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          )}
+          <span>{successMessage ?? simulationError}</span>
+        </div>
+      )}
 
       {/* SEÇÃO 1: INDICADORES CONSOLIDADOS (DESTAQUE NO TOPO) */}
       <div className="space-y-3">
@@ -774,11 +855,15 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
             </div>
             <button
               onClick={handleSaveSimulation}
-              disabled={!newSimName.trim()}
-              className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-blue-600/20"
+              disabled={!newSimName.trim() || isSavingSimulation || isDeletingSimulationId !== null}
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-blue-600/20"
             >
-              <Save className="w-3.5 h-3.5" />
-              Salvar Cenário
+              {isSavingSimulation ? (
+                <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              {isSavingSimulation ? 'Salvando...' : 'Salvar Cenário'}
             </button>
           </div>
         </div>
@@ -800,7 +885,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
                 >
                   <div>
                     <p className="font-bold text-xs text-slate-700 group-hover:text-blue-700 transition-colors">{sim.name}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Criado em: {sim.date}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Criado em: {formatSavedSimulationDate(sim.createdAt)}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] font-bold text-slate-500 px-2 py-0.5 bg-slate-200/60 rounded">
@@ -808,10 +893,15 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
                     </span>
                     <button
                       onClick={(e) => handleDeleteSimulation(sim.id, e)}
-                      className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors cursor-pointer"
-                      title="Excluir este cenário"
+                      disabled={isDeletingSimulationId !== null || isSavingSimulation}
+                      className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={isDeletingSimulationId === sim.id ? 'Excluindo...' : 'Excluir este cenário'}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {isDeletingSimulationId === sim.id ? (
+                        <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -841,6 +931,116 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
           </p>
         </div>
       </div>
+
+      {/* MODAL: HISTÓRICO COMPLETO DE CENÁRIOS SALVOS */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="border-b border-slate-100 px-6 py-4 pr-14">
+            <DialogTitle className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+              <History className="w-4.5 h-4.5 text-blue-600" />
+              Histórico Completo de Cenários
+            </DialogTitle>
+            <DialogDescription className="text-[11px] text-slate-500 mt-1">
+              {savedSimulations.length} cenário{savedSimulations.length === 1 ? '' : 's'} salvo{savedSimulations.length === 1 ? '' : 's'} · Clique em um cenário para carregá-lo na simulação atual.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3 scrollbar-thin">
+            {/* Feedback dentro do modal */}
+            {(successMessage || simulationError) && (
+              <div
+                role="status"
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold border ${
+                  successMessage
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    : 'bg-red-50 border-red-200 text-red-700'
+                }`}
+              >
+                {successMessage ? (
+                  <Check className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{successMessage ?? simulationError}</span>
+              </div>
+            )}
+
+            {savedSimulations.length > 0 ? (
+              savedSimulations.map(sim => (
+                <div
+                  key={sim.id}
+                  className="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden"
+                >
+                  {/* Cabeçalho do cenário */}
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 bg-white border-b border-slate-100">
+                    <div className="min-w-0">
+                      <p className="text-xs font-extrabold text-slate-700 truncate">{sim.name}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Criado em: {formatSavedSimulationDate(sim.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] font-bold text-slate-500 px-2 py-0.5 bg-slate-100 border border-slate-200 rounded">
+                        {sim.products.reduce((acc, curr) => acc + curr.qty, 0)} itens
+                      </span>
+                      <button
+                        onClick={() => { handleLoadSimulation(sim); setHistoryOpen(false); }}
+                        disabled={isSavingSimulation || isDeletingSimulationId !== null}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        Carregar
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteSimulation(sim.id, e)}
+                        disabled={isDeletingSimulationId !== null || isSavingSimulation}
+                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={isDeletingSimulationId === sim.id ? 'Excluindo...' : 'Excluir este cenário'}
+                      >
+                        {isDeletingSimulationId === sim.id ? (
+                          <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Detalhe dos produtos do cenário */}
+                  <div className="px-4 py-3 space-y-1.5">
+                    {sim.products.map((product) => {
+                      const cost = product.simulatedCost ?? product.cost;
+                      const price = product.simulatedPrice ?? product.price;
+                      const markup = cost > 0 ? ((price - cost) / cost) * 100 : 0;
+                      return (
+                        <div key={product.id} className="flex items-center justify-between gap-3 text-[11px]">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-slate-600 truncate">{product.name}</p>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-slate-500 font-semibold">
+                            <span>Qtd {product.qty}</span>
+                            <span>Custo {formatBRL(cost)}</span>
+                            <span>Venda {formatBRL(price)}</span>
+                            <span className={markup >= 0 ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
+                              {formatPercent(markup)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-slate-400">
+                <Info className="w-8 h-8 mb-2 opacity-50" />
+                <p className="text-xs font-bold">Nenhum cenário salvo ainda.</p>
+                <p className="text-[11px] mt-1 opacity-75">Salve o cenário atual para acompanhar seu histórico aqui.</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

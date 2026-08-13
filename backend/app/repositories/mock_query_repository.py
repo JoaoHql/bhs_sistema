@@ -82,6 +82,7 @@ class MockQueryRepository:
             "months": ["2026-06"],
             "companies": ["Demo"],
             "rows": [],
+            "weeklyRows": [],
             "year": 2026,
             "years": [2026],
             "groupTotals": [],

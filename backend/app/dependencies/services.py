@@ -30,6 +30,7 @@ from app.services.materialization_service import MaterializationService
 from app.services.update_service import UpdateService
 from app.repositories.materialization_repository import MaterializationRepository
 from app.repositories.update_repository import UpdateRepository
+from app.repositories.combo_simulation_repository import ComboSimulationRepository, ComboSimulationRepositoryProtocol, MockComboSimulationRepository
 
 
 def get_repository(settings: Settings = Depends(get_settings)) -> ConfigRepositoryProtocol:
@@ -79,6 +80,12 @@ def get_query_repository(settings: Settings = Depends(get_settings)) -> QueryRep
     if settings.database_url:
         return QueryRepository(database_url=settings.database_url)
     return MockQueryRepository()
+
+
+def get_combo_simulation_repository(settings: Settings = Depends(get_settings)) -> ComboSimulationRepositoryProtocol:
+    if settings.database_url:
+        return ComboSimulationRepository(settings.database_url)
+    return MockComboSimulationRepository()
 
 
 def get_module_service(

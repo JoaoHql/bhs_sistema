@@ -1,4 +1,4 @@
-import type { ComboSimulatorProductsResponse, QueryRequest, QueryResponse, SalesOverviewResponse, SalesProjectionResponse, SalesProjectionWeeklyResponse } from '../types';
+import type { ComboSimulatorProductsResponse, QueryRequest, QueryResponse, SalesOverviewResponse, SalesProjectionResponse, SalesProjectionWeeklyResponse, SavedComboSimulation } from '../types';
 import { apiClient } from './apiClient';
 
 export const isQueryApiEnabled = () =>
@@ -15,6 +15,25 @@ export const queryApi = {
 
   comboSimulatorProducts(request: { screenId: string; search?: string; company?: string; limit?: number }): Promise<ComboSimulatorProductsResponse> {
     return apiClient.post<typeof request, ComboSimulatorProductsResponse>('/api/v1/query/combo-simulator-products', request);
+  },
+
+  comboSimulations(request: { screenId: string; company: string }): Promise<SavedComboSimulation[]> {
+    const params = new URLSearchParams({ screenId: request.screenId, company: request.company });
+    return apiClient.get<SavedComboSimulation[]>(`/api/v1/tenant/combo-simulations?${params.toString()}`);
+  },
+
+  createComboSimulation(request: {
+    screenId: string;
+    company: string;
+    name: string;
+    products: SavedComboSimulation['products'];
+  }): Promise<SavedComboSimulation> {
+    return apiClient.post<typeof request, SavedComboSimulation>('/api/v1/tenant/combo-simulations', request);
+  },
+
+  deleteComboSimulation(request: { screenId: string; company: string; id: string }): Promise<void> {
+    const params = new URLSearchParams({ screenId: request.screenId, company: request.company });
+    return apiClient.delete<void>(`/api/v1/tenant/combo-simulations/${request.id}?${params.toString()}`);
   },
 
   salesProjection(request: {

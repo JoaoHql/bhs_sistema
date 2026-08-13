@@ -217,8 +217,8 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
     let sortableItems = [...data.rows];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        const aVal = a[sortConfig.key as keyof typeof a];
-        const bVal = b[sortConfig.key as keyof typeof b];
+        const aVal = a[sortConfig.key as keyof typeof a] ?? null;
+        const bVal = b[sortConfig.key as keyof typeof b] ?? null;
         
         if (aVal === null) return 1;
         if (bVal === null) return -1;
@@ -310,9 +310,9 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
 
   const handleExportCSV = () => {
     if (!data.rows.length) return;
-    const headers = ['Data','Qtd de Vendas','Qtd Proj Vendas','% Qtd Realizada','R$ Faturado','R$ Projetado','% P Realizado','Meta','% M Realizada'];
+    const headers = [data.rowLabel ? 'Semana' : 'Data','Qtd de Vendas','Qtd Proj Vendas','% Qtd Realizada','R$ Faturado','R$ Projetado','% P Realizado','Meta','% M Realizada'];
     const rows = sortedRows.map(r => [
-      r.date, r.quantitySold, r.quantityProjected ?? '',
+      data.rowLabel ? data.rowLabel(r) : r.date, r.quantitySold, r.quantityProjected ?? '',
       r.quantityCompletionPct != null ? (r.quantityCompletionPct * 100).toFixed(2)+'%' : '',
       r.revenue.toFixed(2), r.revenueProjected != null ? r.revenueProjected.toFixed(2) : '',
       r.revenueCompletionPct != null ? (r.revenueCompletionPct * 100).toFixed(2)+'%' : '',
@@ -361,7 +361,7 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
               <TrendingUp className="w-4 h-4" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-slate-900 tracking-tight">Acompanhamento detalhado de Projeções vs Realizados</h1>
+              <h1 className="text-sm font-bold text-slate-900 tracking-tight">{data.rowLabel ? 'Acompanhamento semanal de Projeções vs Realizados' : 'Acompanhamento detalhado de Projeções vs Realizados'}</h1>
               <p className="text-xs text-slate-500 font-medium mt-0.5">Clique para ordenar | Arraste as bordas das colunas para ajustar a largura.</p>
             </div>
           </div>
@@ -419,14 +419,14 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
           <table className="w-full text-xs border-collapse">
             <thead className="select-none sticky top-0 z-10 shadow-sm">
               <tr>
-                {visibleColumns.date                  && <Th columnKey="date" label="Data" align="left" />}
+                {visibleColumns.date                  && <Th columnKey="date" label={data.rowLabel ? 'Semana' : 'Data'} align="left" />}
                 {visibleColumns.quantitySold          && <Th columnKey="quantitySold" label="Qtd de Vendas" />}
-                {visibleColumns.quantityProjected     && <Th columnKey="quantityProjected" label="Qtd. Proj Vendas" infoTooltip="Projeção calculada com base na média histórica dos mesmos dias da semana (ex: sextas-feiras) para a empresa selecionada." />}
+                {visibleColumns.quantityProjected     && <Th columnKey="quantityProjected" label="Qtd. Proj Vendas" infoTooltip={data.rowLabel ? 'Projeção semanal somada a partir da média histórica de cada dia da semana para a empresa selecionada.' : 'Projeção calculada com base na média histórica dos mesmos dias da semana (ex: sextas-feiras) para a empresa selecionada.'} />}
                 {visibleColumns.quantityCompletionPct && <Th columnKey="quantityCompletionPct" label="% Qtd Realizada" />}
                 {visibleColumns.revenue               && <Th columnKey="revenue" label="R$ Faturado" />}
-                {visibleColumns.revenueProjected      && <Th columnKey="revenueProjected" label="R$ Projetado" infoTooltip="Projeção financeira baseada no faturamento médio histórico dos mesmos dias da semana para a empresa selecionada." />}
+                {visibleColumns.revenueProjected      && <Th columnKey="revenueProjected" label="R$ Projetado" infoTooltip={data.rowLabel ? 'Projeção semanal somada a partir do faturamento médio histórico de cada dia da semana para a empresa selecionada.' : 'Projeção financeira baseada no faturamento médio histórico dos mesmos dias da semana para a empresa selecionada.'} />}
                 {visibleColumns.revenueCompletionPct  && <Th columnKey="revenueCompletionPct" label="% P. Realizado" />}
-                {visibleColumns.goal                  && <Th columnKey="goal" label="Meta" infoTooltip="Meta baseada no faturamento realizado no mesmo dia do ano anterior + variação da meta." />}
+                {visibleColumns.goal                  && <Th columnKey="goal" label="Meta" infoTooltip={data.rowLabel ? 'Meta semanal somada a partir do faturamento realizado nos mesmos dias do ano anterior + variação da meta.' : 'Meta baseada no faturamento realizado no mesmo dia do ano anterior + variação da meta.'} />}
                 {visibleColumns.goalCompletionPct     && <Th columnKey="goalCompletionPct" label="% M. Realizada" />}
               </tr>
             </thead>
@@ -434,14 +434,14 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
               {/* TODOS os dias do mês são mantidos intactos na renderização (30, 31 ou 28 dias) */}
               {sortedRows.map((row) => (
                 <tr key={row.date} className="hover:bg-slate-50/80 transition-colors">
-                  {visibleColumns.date                  && <td style={{ width: columnWidths.date, minWidth: columnWidths.date, maxWidth: columnWidths.date }} className="p-3 font-semibold text-slate-700 whitespace-nowrap truncate">{new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(`${row.date}T00:00:00Z`))}</td>}
+                  {visibleColumns.date                  && <td style={{ width: columnWidths.date, minWidth: columnWidths.date, maxWidth: columnWidths.date }} className="p-3 font-semibold text-slate-700 whitespace-nowrap truncate">{data.rowLabel ? data.rowLabel(row) : new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(`${row.date}T00:00:00Z`))}</td>}
                   {visibleColumns.quantitySold          && <td style={{ width: columnWidths.quantitySold, minWidth: columnWidths.quantitySold, maxWidth: columnWidths.quantitySold }} className="p-3 text-right text-slate-800 font-medium whitespace-nowrap truncate">{number.format(row.quantitySold)}</td>}
-                  {visibleColumns.quantityProjected     && <td style={{ width: columnWidths.quantityProjected, minWidth: columnWidths.quantityProjected, maxWidth: columnWidths.quantityProjected }} className="p-3 text-right font-semibold text-amber-900 bg-amber-50/30 whitespace-nowrap truncate" title={row.quantityProjected == null ? "Sem histórico prévio de vendas para este dia da semana nesta empresa" : `Média histórica do dia da semana: ${number.format(row.quantityProjected)} vendas`}>{row.quantityProjected == null ? '—' : number.format(row.quantityProjected)}</td>}
+                  {visibleColumns.quantityProjected     && <td style={{ width: columnWidths.quantityProjected, minWidth: columnWidths.quantityProjected, maxWidth: columnWidths.quantityProjected }} className="p-3 text-right font-semibold text-amber-900 bg-amber-50/30 whitespace-nowrap truncate" title={row.quantityProjected == null ? (data.rowLabel ? 'Sem histórico prévio de vendas para os dias desta semana' : 'Sem histórico prévio de vendas para este dia da semana nesta empresa') : (data.rowLabel ? `Projeção semanal: ${number.format(row.quantityProjected)} vendas` : `Média histórica do dia da semana: ${number.format(row.quantityProjected)} vendas`)}>{row.quantityProjected == null ? '—' : number.format(row.quantityProjected)}</td>}
                   {visibleColumns.quantityCompletionPct && <td style={{ width: columnWidths.quantityCompletionPct, minWidth: columnWidths.quantityCompletionPct, maxWidth: columnWidths.quantityCompletionPct }} className="p-3 text-right whitespace-nowrap"><ProgressBarCell value={row.quantityCompletionPct} /></td>}
                   {visibleColumns.revenue               && <td style={{ width: columnWidths.revenue, minWidth: columnWidths.revenue, maxWidth: columnWidths.revenue }} className="p-3 text-right text-slate-800 font-medium whitespace-nowrap truncate">{money.format(row.revenue)}</td>}
-                  {visibleColumns.revenueProjected      && <td style={{ width: columnWidths.revenueProjected, minWidth: columnWidths.revenueProjected, maxWidth: columnWidths.revenueProjected }} className="p-3 text-right font-semibold text-amber-900 bg-amber-50/30 whitespace-nowrap truncate" title={row.revenueProjected == null ? "Sem histórico prévio de vendas para este dia da semana nesta empresa" : `Média histórica do dia da semana: ${money.format(row.revenueProjected)}`}>{row.revenueProjected == null ? '—' : money.format(row.revenueProjected)}</td>}
+                  {visibleColumns.revenueProjected      && <td style={{ width: columnWidths.revenueProjected, minWidth: columnWidths.revenueProjected, maxWidth: columnWidths.revenueProjected }} className="p-3 text-right font-semibold text-amber-900 bg-amber-50/30 whitespace-nowrap truncate" title={row.revenueProjected == null ? (data.rowLabel ? 'Sem histórico prévio de faturamento para os dias desta semana' : 'Sem histórico prévio de vendas para este dia da semana nesta empresa') : (data.rowLabel ? `Projeção semanal: ${money.format(row.revenueProjected)}` : `Média histórica do dia da semana: ${money.format(row.revenueProjected)}`)}>{row.revenueProjected == null ? '—' : money.format(row.revenueProjected)}</td>}
                   {visibleColumns.revenueCompletionPct  && <td style={{ width: columnWidths.revenueCompletionPct, minWidth: columnWidths.revenueCompletionPct, maxWidth: columnWidths.revenueCompletionPct }} className="p-3 text-right whitespace-nowrap"><ProgressBarCell value={row.revenueCompletionPct} /></td>}
-                  {visibleColumns.goal                  && <td style={{ width: columnWidths.goal, minWidth: columnWidths.goal, maxWidth: columnWidths.goal }} className="p-3 text-right text-slate-800 font-medium whitespace-nowrap truncate" title={row.goal == null ? "Sem histórico equivalente no mesmo dia do ano anterior para esta empresa" : `Meta baseada no mesmo dia do ano anterior`}>{row.goal == null ? '—' : money.format(row.goal)}</td>}
+                  {visibleColumns.goal                  && <td style={{ width: columnWidths.goal, minWidth: columnWidths.goal, maxWidth: columnWidths.goal }} className="p-3 text-right text-slate-800 font-medium whitespace-nowrap truncate" title={row.goal == null ? (data.rowLabel ? 'Sem histórico equivalente nos dias do ano anterior para esta semana' : 'Sem histórico equivalente no mesmo dia do ano anterior para esta empresa') : (data.rowLabel ? 'Meta semanal baseada no ano anterior' : 'Meta baseada no mesmo dia do ano anterior')}>{row.goal == null ? '—' : money.format(row.goal)}</td>}
                   {visibleColumns.goalCompletionPct     && <td style={{ width: columnWidths.goalCompletionPct, minWidth: columnWidths.goalCompletionPct, maxWidth: columnWidths.goalCompletionPct }} className="p-3 text-right whitespace-nowrap"><ProgressBarCell value={row.goalCompletionPct} /></td>}
                 </tr>
               ))}
@@ -451,7 +451,11 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
 
         <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-600 font-medium shrink-0">
           <span>
-            Mostrando todos os <strong className="text-slate-900">{sortedRows.length} dias do mês</strong> ({compact ? '5 linhas visíveis antes da rolagem' : `View Report: ${effectiveViewReportRows} registros visíveis antes do scroll`})
+            {data.rowLabel ? (
+              <>Mostrando todas as <strong className="text-slate-900">{sortedRows.length} semanas do mês</strong></>
+            ) : (
+              <>Mostrando todos os <strong className="text-slate-900">{sortedRows.length} dias do mês</strong> ({compact ? '5 linhas visíveis antes da rolagem' : `View Report: ${effectiveViewReportRows} registros visíveis antes do scroll`})</>
+            )}
           </span>
         </div>
 
