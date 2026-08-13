@@ -261,6 +261,28 @@ export interface SalesProjectionResponse {
   rows: SalesProjectionRow[];
 }
 
+export interface SalesProjectionAggregateRow {
+  id: number;
+  company: string;
+  label: string;
+  total: number;
+}
+
+export interface SalesProjectionMonthlySeriesPoint {
+  month: string;
+  total: number;
+  goal: number | null;
+}
+
+export interface SalesProjectionWeeklyResponse extends SalesProjectionResponse {
+  year: number | null;
+  years: number[];
+  groupTotals: SalesProjectionAggregateRow[];
+  productTotals: SalesProjectionAggregateRow[];
+  attendantTotals: SalesProjectionAggregateRow[];
+  monthlySeries: SalesProjectionMonthlySeriesPoint[];
+}
+
 export interface ScreenFilterOption {
   value: string;
   label: string;

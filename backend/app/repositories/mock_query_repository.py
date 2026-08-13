@@ -74,3 +74,21 @@ class MockQueryRepository:
     async def fetch_sales_projection(self, schema_name: str, month: str | None, company: str | None, quantity_growth_pct: float, revenue_growth_pct: float, goal_growth_pct: float) -> dict[str, Any]:
         _ = (schema_name, month, company, quantity_growth_pct, revenue_growth_pct, goal_growth_pct)
         return {"month": "2026-06", "months": ["2026-06"], "companies": ["Demo"], "rows": []}
+
+    async def fetch_sales_projection_weekly(self, schema_name: str, month: str | None, company: str | None, quantity_growth_pct: float, revenue_growth_pct: float, goal_growth_pct: float) -> dict[str, Any]:
+        _ = (schema_name, month, company, quantity_growth_pct, revenue_growth_pct, goal_growth_pct)
+        return {
+            "month": "2026-06",
+            "months": ["2026-06"],
+            "companies": ["Demo"],
+            "rows": [],
+            "year": 2026,
+            "years": [2026],
+            "groupTotals": [],
+            "productTotals": [],
+            "attendantTotals": [],
+            "monthlySeries": [
+                {"month": f"2026-{month_number:02d}", "total": 0.0, "goal": None}
+                for month_number in range(1, 13)
+            ],
+        }

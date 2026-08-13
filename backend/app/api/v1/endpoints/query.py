@@ -99,6 +99,19 @@ class SalesProjectionResponse(BaseModel):
     rows: list[dict]
 
 
+class SalesProjectionWeeklyRequest(SalesProjectionRequest):
+    pass
+
+
+class SalesProjectionWeeklyResponse(SalesProjectionResponse):
+    year: int | None
+    years: list[int]
+    group_totals: list[dict] = Field(alias="groupTotals")
+    product_totals: list[dict] = Field(alias="productTotals")
+    attendant_totals: list[dict] = Field(alias="attendantTotals")
+    monthly_series: list[dict] = Field(alias="monthlySeries")
+
+
 @router.post("", response_model=QueryResponse)
 async def execute_query(
     request: QueryRequest,
@@ -326,5 +339,78 @@ async def sales_projection(
         await audit.log_action(
             actor_id=user.id, client_id=client.id, action="query", resource_type="screen", resource_id=request.screen_id,
             status="failed", metadata={"template": "sales-projection", "error": exc.message},
+        )
+        raise exc
+
+
+@router.post("/sales-projection-weekly", response_model=SalesProjectionWeeklyResponse)
+async def sales_projection_weekly(
+    request: SalesProjectionWeeklyRequest,
+    user: User = Depends(get_current_user),
+    repo: ConfigRepositoryProtocol = Depends(get_repository),
+    query_repo: QueryRepositoryProtocol = Depends(get_query_repository),
+    redis: RedisService = Depends(get_redis_service),
+    audit: AuditService = Depends(get_audit_service),
+    x_tenant_slug: str | None = Header(default=None, alias="X-Tenant-Slug"),
+) -> SalesProjectionWeeklyResponse:
+    client_slug = resolve_tenant_for_request(user, x_tenant_slug)
+    client = await resolve_request_client(user, client_slug, repo)
+
+    if request.screen_id != "projecao-semanal":
+        from app.core.errors import NotFoundError
+        raise NotFoundError("Tela nao encontrada.")
+
+    cache_key = _query_cache_key(client_slug, "sales-projection-weekly", {
+        "month": request.month,
+        "company": request.company,
+        "quantityGrowthPct": request.quantity_growth_pct,
+        "revenueGrowthPct": request.revenue_growth_pct,
+        "goalGrowthPct": request.goal_growth_pct,
+        "screenId": request.screen_id,
+    })
+    cached = await redis.get_json(cache_key)
+    if cached is not None:
+        return SalesProjectionWeeklyResponse(**cached)
+
+    try:
+        screen, schema_name = await asyncio.gather(
+            repo.get_screen(client.id, request.screen_id),
+            query_repo.get_validated_tenant_schema(client_slug),
+        )
+        if screen is None:
+            from app.core.errors import NotFoundError
+            raise NotFoundError("Tela nao encontrada.")
+        if not await query_repo.has_sales_projection_data(schema_name):
+            from app.core.errors import BadRequestError
+            raise BadRequestError("Base diaria de projecao de vendas indisponivel para este tenant.")
+        result = await query_repo.fetch_sales_projection_weekly(
+            schema_name=schema_name,
+            month=request.month,
+            company=request.company.strip() if request.company else None,
+            quantity_growth_pct=request.quantity_growth_pct,
+            revenue_growth_pct=request.revenue_growth_pct,
+            goal_growth_pct=request.goal_growth_pct,
+        )
+        audit.log_action_later(
+            actor_id=user.id,
+            client_id=client.id,
+            action="query",
+            resource_type="screen",
+            resource_id=request.screen_id,
+            status="success",
+            metadata={"template": "sales-projection-weekly", "month": result["month"]},
+        )
+        response = SalesProjectionWeeklyResponse(screenId=request.screen_id, clientSlug=client_slug, **result)
+        await redis.set_json(cache_key, response.model_dump(by_alias=True), ttl_seconds=CACHE_TTL_24H)
+        return response
+    except ApiError as exc:
+        await audit.log_action(
+            actor_id=user.id,
+            client_id=client.id,
+            action="query",
+            resource_type="screen",
+            resource_id=request.screen_id,
+            status="failed",
+            metadata={"template": "sales-projection-weekly", "error": exc.message},
         )
         raise exc

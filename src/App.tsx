@@ -19,6 +19,7 @@ const AdsView = lazy(() => import('./features/ads/views/AdsView').then(module =>
 const SalesOverviewTenantView = lazy(() => import('./features/vendas/views/SalesOverviewTenantView').then(module => ({ default: module.SalesOverviewTenantView })));
 const TenantComboSimulatorView = lazy(() => import('./features/simuladores/views/TenantComboSimulatorView').then(module => ({ default: module.TenantComboSimulatorView })));
 const SalesProjectionTenantView = lazy(() => import('./features/vendas/views/SalesProjectionTenantView').then(module => ({ default: module.SalesProjectionTenantView })));
+const SalesProjectionWeeklyTenantView = lazy(() => import('./features/vendas/views/SalesProjectionWeeklyTenantView').then(module => ({ default: module.SalesProjectionWeeklyTenantView })));
 const MensagensView = lazy(() => import('./features/mensagens/views/MensagensView').then(module => ({ default: module.MensagensView })));
 
 function EmptyTenantView() {
@@ -143,11 +144,15 @@ function DashboardContent() {
         <SalesProjectionTenantView screenId={currentTab} />
       )}
 
+      {canRenderDynamicScreen && currentTab === 'projecao-semanal' && (
+        <SalesProjectionWeeklyTenantView screenId={currentTab} />
+      )}
+
       {canRenderDynamicScreen && currentTab === 'mensagens-disparos-whatsapp' && (
         <MensagensView />
       )}
 
-      {canRenderDynamicScreen && currentTab !== 'demo-vendas' && currentTab !== 'simulador-combos' && currentTab !== 'projecao-vendas' && currentTab !== 'mensagens-disparos-whatsapp' && (
+      {canRenderDynamicScreen && currentTab !== 'demo-vendas' && currentTab !== 'simulador-combos' && currentTab !== 'projecao-vendas' && currentTab !== 'projecao-semanal' && currentTab !== 'mensagens-disparos-whatsapp' && (
         <DynamicCanvasView screenId={currentTab} />
       )}
 

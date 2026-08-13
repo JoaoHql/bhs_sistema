@@ -165,7 +165,7 @@ function ProgressBarCell({ value }: { value: number | null }) {
   );
 }
 
-export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateData }> = ({ data }) => {
+export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateData; compact?: boolean }> = ({ data, compact = false }) => {
   const [columnConfigOpen, setColumnConfigOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
     date: true, quantitySold: true, quantityProjected: true, quantityCompletionPct: true,
@@ -173,7 +173,8 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
   });
 
   // Quantidade de registros visíveis na viewport da tabela ANTES de iniciar a rolagem interna (padrão: 7 registros)
-  const [viewReportRows, setViewReportRows] = useState<number>(7);
+  const [viewReportRows, setViewReportRows] = useState<number>(compact ? 5 : 7);
+  const effectiveViewReportRows = compact ? 5 : viewReportRows;
 
   // Estado de ordenação: null = sem ordenação
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -234,8 +235,8 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
   const tableMaxHeight = useMemo(() => {
     const rowHeight = 41;
     const headerHeight = 44;
-    return headerHeight + (viewReportRows * rowHeight);
-  }, [viewReportRows]);
+    return headerHeight + (effectiveViewReportRows * rowHeight);
+  }, [effectiveViewReportRows]);
 
   // Alterna a ordenação em 3 estados: ASC -> DESC -> NENHUMA
   const requestSort = (key: string) => {
@@ -327,10 +328,10 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
 
   return (
     // h-full para permitir que o layout acomode a expansão
-    <div className="flex flex-col space-y-4 pb-8" aria-busy={data.isRefreshing}>
+    <div className="flex flex-col space-y-4 pb-0" aria-busy={data.isRefreshing}>
 
       {/* Cenários compactos */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <ScenarioInput label="Variação na qtd. vendas" field="quantityGrowthPct"
           value={data.scenario.quantityGrowthPct} onChange={data.onScenarioChange}
           icon={ShoppingCart} iconBg="bg-blue-50" iconColor="text-blue-600" accentColor="accent-blue-600" />
@@ -370,7 +371,7 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
             <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold shadow-2xs">
               <span className="text-[11px] text-slate-500 font-medium">Linhas visíveis sem rolagem:</span>
               <select
-                value={viewReportRows}
+                value={effectiveViewReportRows}
                 onChange={(e) => setViewReportRows(Number(e.target.value))}
                 className="bg-transparent font-bold text-blue-700 focus:outline-none cursor-pointer text-xs"
               >
@@ -450,7 +451,7 @@ export const SalesProjectionTemplate: React.FC<{ data: SalesProjectionTemplateDa
 
         <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-600 font-medium shrink-0">
           <span>
-            Mostrando todos os <strong className="text-slate-900">{sortedRows.length} dias do mês</strong> (View Report: {viewReportRows} registros visíveis antes do scroll)
+            Mostrando todos os <strong className="text-slate-900">{sortedRows.length} dias do mês</strong> ({compact ? '5 linhas visíveis antes da rolagem' : `View Report: ${effectiveViewReportRows} registros visíveis antes do scroll`})
           </span>
         </div>
 

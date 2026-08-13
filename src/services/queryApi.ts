@@ -1,4 +1,4 @@
-import type { ComboSimulatorProductsResponse, QueryRequest, QueryResponse, SalesOverviewResponse, SalesProjectionResponse } from '../types';
+import type { ComboSimulatorProductsResponse, QueryRequest, QueryResponse, SalesOverviewResponse, SalesProjectionResponse, SalesProjectionWeeklyResponse } from '../types';
 import { apiClient } from './apiClient';
 
 export const isQueryApiEnabled = () =>
@@ -26,5 +26,16 @@ export const queryApi = {
     goalGrowthPct: number;
   }): Promise<SalesProjectionResponse> {
     return apiClient.post<typeof request, SalesProjectionResponse>('/api/v1/query/sales-projection', request);
+  },
+
+  salesProjectionWeekly(request: {
+    screenId: string;
+    month?: string;
+    company?: string;
+    quantityGrowthPct: number;
+    revenueGrowthPct: number;
+    goalGrowthPct: number;
+  }): Promise<SalesProjectionWeeklyResponse> {
+    return apiClient.post<typeof request, SalesProjectionWeeklyResponse>('/api/v1/query/sales-projection-weekly', request);
   },
 };

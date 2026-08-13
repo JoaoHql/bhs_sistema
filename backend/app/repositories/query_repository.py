@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable
+from datetime import date
 from typing import Any, Protocol, TypeVar
 
 import psycopg
@@ -24,6 +25,15 @@ class QueryRepositoryProtocol(Protocol):
     async def fetch_combo_products(self, schema_name: str, search: str, company: str | None, limit: int) -> list[dict[str, Any]]: ...
     async def fetch_combo_companies(self, schema_name: str) -> list[str]: ...
     async def fetch_sales_projection(
+        self,
+        schema_name: str,
+        month: str | None,
+        company: str | None,
+        quantity_growth_pct: float,
+        revenue_growth_pct: float,
+        goal_growth_pct: float,
+    ) -> dict[str, Any]: ...
+    async def fetch_sales_projection_weekly(
         self,
         schema_name: str,
         month: str | None,
@@ -512,3 +522,228 @@ class QueryRepository:
             return await self._run(operation)
         except psycopg.Error as exc:
             raise BadRequestError("Consulta invalida para projecao de vendas.") from exc
+
+    async def fetch_sales_projection_weekly(
+        self,
+        schema_name: str,
+        month: str | None,
+        company: str | None,
+        quantity_growth_pct: float,
+        revenue_growth_pct: float,
+        goal_growth_pct: float,
+    ) -> dict[str, Any]:
+        """Reutiliza a tabela diária e acrescenta agregações opcionais da base detalhada."""
+        base = await self.fetch_sales_projection(
+            schema_name=schema_name,
+            month=month,
+            company=company,
+            quantity_growth_pct=quantity_growth_pct,
+            revenue_growth_pct=revenue_growth_pct,
+            goal_growth_pct=goal_growth_pct,
+        )
+        selected_month = base.get("month")
+        if not selected_month:
+            return {
+                **base,
+                "year": None,
+                "years": [],
+                "groupTotals": [],
+                "productTotals": [],
+                "attendantTotals": [],
+                "monthlySeries": [],
+            }
+
+        try:
+            analytics = await self._run(
+                lambda: self._fetch_sales_projection_weekly_analytics(
+                    schema_name=schema_name,
+                    selected_month=selected_month,
+                    company=company,
+                    goal_growth_pct=goal_growth_pct,
+                )
+            )
+        except (psycopg.Error, ServiceUnavailableError):
+            # A base detalhada opcional nunca pode bloquear a tabela diária.
+            year = int(selected_month[:4])
+            analytics = {
+                "year": year,
+                "years": sorted({int(value[:4]) for value in base.get("months", [])}, reverse=True),
+                "groupTotals": [],
+                "productTotals": [],
+                "attendantTotals": [],
+                "monthlySeries": [
+                    {"month": f"{year:04d}-{month_number:02d}", "total": 0.0, "goal": None}
+                    for month_number in range(1, 13)
+                ],
+            }
+        return {**base, **analytics}
+
+    def _fetch_sales_projection_weekly_analytics(
+        self,
+        *,
+        schema_name: str,
+        selected_month: str,
+        company: str | None,
+        goal_growth_pct: float,
+    ) -> dict[str, Any]:
+        quoted_schema = quote_identifier(schema_name, tenant_schema=True)
+        selected_date = date.fromisoformat(f"{selected_month}-01")
+        year = selected_date.year
+        next_year = date(year + 1, 1, 1)
+        previous_year = date(year - 1, 1, 1)
+        if selected_date.month == 12:
+            next_month = date(year + 1, 1, 1)
+        else:
+            next_month = date(year, selected_date.month + 1, 1)
+
+        def relation_exists(conn: psycopg.Connection, relation: str) -> bool:
+            row = conn.execute(
+                "select to_regclass(%s) is not null as exists",
+                (f"{schema_name}.{relation}",),
+            ).fetchone()
+            return bool(row and row["exists"])
+
+        def fallback_label(kind: str, entity_id: int) -> str:
+            if entity_id == 0:
+                return "Não informado"
+            return f"{kind} #{entity_id}"
+
+        def ranking(
+            conn: psycopg.Connection,
+            *,
+            source_column: str,
+            kind: str,
+            relation: str,
+            relation_id: str,
+            relation_label: str,
+        ) -> list[dict[str, Any]]:
+            if not relation_exists(conn, "projecao_vendas_detalhada"):
+                return []
+            rows = conn.execute(
+                f"""
+                select
+                  d.empresa as company,
+                  d.{source_column}::int as entity_id,
+                  sum(d.valor_faturado)::float8 as total
+                from {quoted_schema}.projecao_vendas_detalhada d
+                where d.data_venda >= %s
+                  and d.data_venda < %s
+                  and (%s::text is null or d.empresa = %s::text)
+                group by d.empresa, d.{source_column}
+                order by total desc, d.empresa, d.{source_column}
+                """,
+                (selected_date, next_month, company, company),
+            ).fetchall()
+
+            labels: dict[tuple[str, int], str] = {}
+            if relation_exists(conn, relation):
+                dimension_rows = conn.execute(
+                    f"""
+                    select empresa as company, {relation_id}::int as entity_id, {relation_label} as label
+                    from {quoted_schema}.{relation}
+                    where (%s::text is null or empresa = %s::text)
+                    """,
+                    (company, company),
+                ).fetchall()
+                labels = {
+                    (row["company"], int(row["entity_id"])): str(row["label"]).strip()
+                    for row in dimension_rows
+                    if row["label"] is not None and str(row["label"]).strip()
+                }
+
+            return [
+                {
+                    "id": int(row["entity_id"]),
+                    "company": row["company"],
+                    "label": labels.get(
+                        (row["company"], int(row["entity_id"])),
+                        fallback_label(kind, int(row["entity_id"])),
+                    ),
+                    "total": float(row["total"] or 0),
+                }
+                for row in rows
+            ]
+
+        with self._read_connection() as conn:
+            years = [
+                int(row["year"])
+                for row in conn.execute(
+                    f"""
+                    select extract(year from data_venda)::int as year
+                    from {quoted_schema}.projecao_vendas_diaria
+                    group by 1
+                    order by 1 desc
+                    """
+                ).fetchall()
+            ]
+
+            monthly_total_rows: list[dict[str, Any]] = []
+            if relation_exists(conn, "projecao_vendas_detalhada"):
+                monthly_total_rows = conn.execute(
+                    f"""
+                    select
+                      to_char(date_trunc('month', d.data_venda), 'YYYY-MM') as month,
+                      sum(d.valor_faturado)::float8 as total
+                    from {quoted_schema}.projecao_vendas_detalhada d
+                    where d.data_venda >= %s
+                      and d.data_venda < %s
+                      and (%s::text is null or d.empresa = %s::text)
+                    group by 1
+                    """,
+                    (date(year, 1, 1), next_year, company, company),
+                ).fetchall()
+
+            goal_rows = conn.execute(
+                f"""
+                select
+                  to_char(date_trunc('month', p.data_venda) + interval '1 year', 'YYYY-MM') as month,
+                  (sum(p.valor_faturado) * (1 + %s / 100.0))::float8 as goal
+                from {quoted_schema}.projecao_vendas_diaria p
+                where p.data_venda >= %s
+                  and p.data_venda < %s
+                  and (%s::text is null or p.empresa = %s::text)
+                group by 1
+                """,
+                (goal_growth_pct, previous_year, date(year, 1, 1), company, company),
+            ).fetchall()
+
+            totals_by_month = {row["month"]: float(row["total"] or 0) for row in monthly_total_rows}
+            goals_by_month = {row["month"]: float(row["goal"]) for row in goal_rows}
+            monthly_series = [
+                {
+                    "month": f"{year:04d}-{month_number:02d}",
+                    "total": totals_by_month.get(f"{year:04d}-{month_number:02d}", 0.0),
+                    "goal": goals_by_month.get(f"{year:04d}-{month_number:02d}"),
+                }
+                for month_number in range(1, 13)
+            ]
+
+            return {
+                "year": year,
+                "years": years,
+                "groupTotals": ranking(
+                    conn,
+                    source_column="grupo_id",
+                    kind="Grupo",
+                    relation="dim_grupos",
+                    relation_id="grupo_id",
+                    relation_label="nome",
+                ),
+                "productTotals": ranking(
+                    conn,
+                    source_column="produto_id",
+                    kind="Produto",
+                    relation="produtos",
+                    relation_id="produto_id",
+                    relation_label="descricao",
+                ),
+                "attendantTotals": ranking(
+                    conn,
+                    source_column="atendente_id",
+                    kind="Atendente",
+                    relation="dim_atendentes",
+                    relation_id="atendente_id",
+                    relation_label="nome",
+                ),
+                "monthlySeries": monthly_series,
+            }

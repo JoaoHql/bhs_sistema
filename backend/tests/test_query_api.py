@@ -117,3 +117,53 @@ def test_combo_simulator_unknown_company_returns_no_products(client: TestClient)
     assert response.status_code == 200
     assert response.json()["companies"] == ["Demo"]
     assert response.json()["rows"] == []
+
+
+def test_sales_projection_weekly_contract_uses_safe_optional_fallback(client: TestClient) -> None:
+    login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "admin@gelobel.com.br",
+            "password": "Gelo#X7v!Q2mL9pR4",
+            "clientSlug": "gelobel",
+        },
+    )
+    assert login.status_code == 200
+
+    response = client.post(
+        "/api/v1/query/sales-projection-weekly",
+        json={
+            "screenId": "projecao-semanal",
+            "month": "2026-06",
+            "company": "Demo",
+            "quantityGrowthPct": 0,
+            "revenueGrowthPct": 0,
+            "goalGrowthPct": 0,
+        },
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["screenId"] == "projecao-semanal"
+    assert payload["year"] == 2026
+    assert payload["years"] == [2026]
+    assert len(payload["monthlySeries"]) == 12
+    assert payload["groupTotals"] == []
+    assert payload["productTotals"] == []
+    assert payload["attendantTotals"] == []
+
+
+def test_sales_projection_weekly_rejects_other_screen(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/query/sales-projection-weekly",
+        json={
+            "screenId": "demo-vendas",
+            "quantityGrowthPct": 0,
+            "revenueGrowthPct": 0,
+            "goalGrowthPct": 0,
+        },
+        headers=AUTH_HEADERS,
+    )
+
+    assert response.status_code == 404

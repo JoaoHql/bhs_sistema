@@ -459,6 +459,7 @@ class MockConfigRepository:
             "mensagens-disparos-whatsapp": "mensagens",
             "simulador-combos": "simuladores",
             "configuracoes": "configuracoes",
+            "projecao-semanal": "gestao-bi",
             "demo-vendas": "mod-demo-vendas",
         }
         if screen_id in hidden_screens or screen_modules.get(screen_id) in hidden_modules:
@@ -486,6 +487,15 @@ class MockConfigRepository:
                 id="configuracoes",
                 module_id="configuracoes",
                 label="Configurações",
+                layout="canvas",
+                filters=[],
+                components=[],
+            )
+        if client_id == "cli_gelobel" and screen_id == "projecao-semanal":
+            return Screen(
+                id="projecao-semanal",
+                module_id="gestao-bi",
+                label="Projeção Semanal",
                 layout="canvas",
                 filters=[],
                 components=[],
