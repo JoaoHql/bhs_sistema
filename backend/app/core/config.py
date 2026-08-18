@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     internal_api_token: str | None = None
     jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
-    jwt_access_token_minutes: int = 180
+    jwt_access_token_minutes: int = 720
     jwt_issuer: str = "bhs-modelo-backend"
     jwt_audience: str = "bhs-modelo-api"
     password_min_length: int = Field(default=10, ge=10, le=200)

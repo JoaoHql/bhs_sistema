@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Mail, ArrowRight, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { configApi } from '../services/configApi';
+import { storeSession } from '../services/authToken';
 import { useDashboard } from '../store/dashboardStore';
 
 export function LoginScreen() {
@@ -23,7 +24,7 @@ export function LoginScreen() {
 
     try {
       const response = await configApi.login(email, password);
-      localStorage.setItem('bhs_auth_token', response.access_token);
+      storeSession(response.access_token);
       if (response.password_change_required) {
         setCurrentUser(response.user);
         return;

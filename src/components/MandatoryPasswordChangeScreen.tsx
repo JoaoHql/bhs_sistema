@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Check, Eye, EyeOff, KeyRound, Loader2, ShieldAlert } from 'lucide-react';
 import { ApiClientError } from '../services/apiClient';
 import { configApi } from '../services/configApi';
+import { clearSession, storeSession } from '../services/authToken';
 import { useDashboard } from '../store/dashboardStore';
 
 const passwordChecks = (password: string) => [
@@ -33,9 +34,9 @@ export function MandatoryPasswordChangeScreen() {
     setError(null);
     try {
       const response = await configApi.changePassword({ newPassword: password });
-      localStorage.setItem('bhs_auth_token', response.access_token);
+      storeSession(response.access_token);
       setCurrentUser(response.user);
-      setCurrentTab(response.user.is_staff || response.user.roles.includes('admin') ? 'configuracoes' : '');
+      setCurrentTab('');
       setPassword('');
       setConfirmation('');
     } catch (requestError) {
@@ -51,7 +52,7 @@ export function MandatoryPasswordChangeScreen() {
   };
 
   const logout = () => {
-    localStorage.removeItem('bhs_auth_token');
+    clearSession();
     setCurrentTab('');
     setCurrentUser(null);
   };

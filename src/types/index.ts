@@ -314,6 +314,30 @@ export interface SalesProjectionWeeklyResponse extends SalesProjectionResponse {
   weeklyRows: SalesProjectionWeeklyRow[];
 }
 
+export interface SalesProjectionMatrixRow {
+  sales_date: string;
+  week: number;
+  grupo_id: number;
+  produto_id: number;
+  atendente_id: number;
+  grupo_label: string;
+  produto_label: string;
+  atendente_label: string;
+  company: string;
+  quantity_sold: number;
+  quantity_projected: number | null;
+  quantity_completion_pct: number | null;
+  revenue: number;
+  revenue_projected: number | null;
+  revenue_completion_pct: number | null;
+  goal: number | null;
+  goal_completion_pct: number | null;
+}
+
+export interface SalesProjectionMatrixResponse extends SalesProjectionWeeklyResponse {
+  matrixRows: SalesProjectionMatrixRow[];
+}
+
 export interface ScreenFilterOption {
   value: string;
   label: string;

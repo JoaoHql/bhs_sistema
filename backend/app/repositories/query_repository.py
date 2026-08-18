@@ -43,6 +43,16 @@ class QueryRepositoryProtocol(Protocol):
         goal_growth_pct: float,
     ) -> dict[str, Any]: ...
 
+    async def fetch_sales_projection_matrix(
+        self,
+        schema_name: str,
+        month: str | None,
+        company: str | None,
+        quantity_growth_pct: float,
+        revenue_growth_pct: float,
+        goal_growth_pct: float,
+    ) -> dict[str, Any]: ...
+
 
 class QueryRepository:
     def __init__(self, database_url: str) -> None:
@@ -874,3 +884,295 @@ class QueryRepository:
                 ),
                 "monthlySeries": monthly_series,
             }
+
+    async def fetch_sales_projection_matrix(
+        self,
+        schema_name: str,
+        month: str | None,
+        company: str | None,
+        quantity_growth_pct: float,
+        revenue_growth_pct: float,
+        goal_growth_pct: float,
+    ) -> dict[str, Any]:
+        """Matriz 4 níveis Data→Grupo→Produto→Atendente com projeção por célula (SBM filtrado)."""
+        base = await self.fetch_sales_projection(
+            schema_name=schema_name,
+            month=month,
+            company=company,
+            quantity_growth_pct=quantity_growth_pct,
+            revenue_growth_pct=revenue_growth_pct,
+            goal_growth_pct=goal_growth_pct,
+        )
+        selected_month = base.get("month")
+        if not selected_month:
+            return {
+                **base,
+                "year": None,
+                "years": [],
+                "groupTotals": [],
+                "productTotals": [],
+                "attendantTotals": [],
+                "monthlySeries": [],
+                "matrixRows": [],
+            }
+
+        try:
+            analytics = await self._run(
+                lambda: self._fetch_sales_projection_weekly_analytics(
+                    schema_name=schema_name,
+                    selected_month=selected_month,
+                    company=company,
+                    goal_growth_pct=goal_growth_pct,
+                )
+            )
+        except (psycopg.Error, ServiceUnavailableError):
+            year = int(selected_month[:4])
+            analytics = {
+                "year": year,
+                "years": sorted({int(value[:4]) for value in base.get("months", [])}, reverse=True),
+                "groupTotals": [],
+                "productTotals": [],
+                "attendantTotals": [],
+                "monthlySeries": [
+                    {"month": f"{year:04d}-{month_number:02d}", "total": 0.0, "goal": None}
+                    for month_number in range(1, 13)
+                ],
+            }
+
+        try:
+            matrix_rows = await self._run(
+                lambda: self._fetch_sales_projection_matrix(
+                    schema_name=schema_name,
+                    selected_month=selected_month,
+                    company=company,
+                    quantity_growth_pct=quantity_growth_pct,
+                    revenue_growth_pct=revenue_growth_pct,
+                    goal_growth_pct=goal_growth_pct,
+                )
+            )
+        except (psycopg.Error, ServiceUnavailableError):
+            matrix_rows = []
+
+        return {**base, **analytics, "matrixRows": matrix_rows}
+
+    def _fetch_sales_projection_matrix(
+        self,
+        *,
+        schema_name: str,
+        selected_month: str,
+        company: str | None,
+        quantity_growth_pct: float,
+        revenue_growth_pct: float,
+        goal_growth_pct: float,
+    ) -> list[dict[str, Any]]:
+        """Matriz diária: Data(dia) → Grupo → Produto → Atendente com SBM filtrado por isodow e por tupla.
+
+        - Realizado: sum por data_venda + dimensões no mês selecionado.
+        - Projeção SBM: para cada (data, tupla) projeta avg dos últimos 4 mesmos isodow da tupla * (1+growth).
+        - Goal: sum do mesmo dia no ano anterior por tupla * (1+goal_growth).
+        """
+        quoted_schema = quote_identifier(schema_name, tenant_schema=True)
+        selected_date = date.fromisoformat(f"{selected_month}-01")
+        if selected_date.month == 12:
+            next_month = date(selected_date.year + 1, 1, 1)
+        else:
+            next_month = date(selected_date.year, selected_date.month + 1, 1)
+
+        goal_start = date(selected_date.year - 1, selected_date.month, 1)
+        if selected_date.month == 12:
+            goal_end = date(selected_date.year, 1, 1)
+        else:
+            goal_end = date(selected_date.year - 1, selected_date.month + 1, 1)
+
+        def relation_exists(conn: psycopg.Connection, relation: str) -> bool:
+            row = conn.execute(
+                "select to_regclass(%s) is not null as exists",
+                (f"{schema_name}.{relation}",),
+            ).fetchone()
+            return bool(row and row["exists"])
+
+        with self._read_connection() as conn:
+            if not relation_exists(conn, "projecao_vendas_detalhada"):
+                return []
+
+            # Realizado diário por Data + dimensões no mês selecionado
+            current_rows = conn.execute(
+                f"""
+                select
+                  data_venda::text as sales_date,
+                  extract(isodow from data_venda)::int as dow,
+                  grupo_id::int as grupo_id,
+                  produto_id::int as produto_id,
+                  atendente_id::int as atendente_id,
+                  sum(quantidade_vendida)::numeric(20,4) as quantity_sold,
+                  sum(valor_faturado)::numeric(20,4) as revenue
+                from {quoted_schema}.projecao_vendas_detalhada
+                where data_venda >= %s and data_venda < %s
+                  and (%s::text is null or empresa = %s::text)
+                group by data_venda, dow, grupo_id, produto_id, atendente_id
+                """,
+                (selected_date, next_month, company, company),
+            ).fetchall()
+
+            # Semente SBM diária: últimos 60 dias por tupla + dow, para avg últimos 4 mesmos isodow
+            # Busca raw por dia+tupla com dow, depois avg em Python (rn <=4)
+            raw_seed_rows = conn.execute(
+                f"""
+                select
+                  data_venda::text as sales_date,
+                  extract(isodow from data_venda)::int as dow,
+                  grupo_id::int as grupo_id,
+                  produto_id::int as produto_id,
+                  atendente_id::int as atendente_id,
+                  sum(quantidade_vendida)::numeric(20,4) as quantity,
+                  sum(valor_faturado)::numeric(20,4) as revenue,
+                  data_venda as sort_date
+                from {quoted_schema}.projecao_vendas_detalhada
+                where data_venda >= %s and data_venda < %s
+                  and (%s::text is null or empresa = %s::text)
+                group by data_venda, dow, grupo_id, produto_id, atendente_id
+                order by grupo_id, produto_id, atendente_id, dow, data_venda desc
+                """,
+                (date.fromisoformat(f"{selected_month}-01") - __import__("datetime").timedelta(days=60), selected_date, company, company),
+            ).fetchall()
+
+            # Goal diário: mesmo dia no ano anterior por tupla
+            goal_rows = conn.execute(
+                f"""
+                select
+                  data_venda::text as sales_date,
+                  grupo_id::int as grupo_id,
+                  produto_id::int as produto_id,
+                  atendente_id::int as atendente_id,
+                  sum(valor_faturado)::numeric(20,4) as goal_base
+                from {quoted_schema}.projecao_vendas_detalhada
+                where data_venda >= %s and data_venda < %s
+                  and (%s::text is null or empresa = %s::text)
+                group by data_venda, grupo_id, produto_id, atendente_id
+                """,
+                (goal_start, goal_end, company, company),
+            ).fetchall()
+
+            # Labels
+            grupo_labels: dict[tuple[str, int], str] = {}
+            produto_labels: dict[tuple[str, int], str] = {}
+            atendente_labels: dict[tuple[str, int], str] = {}
+            if relation_exists(conn, "dim_grupos"):
+                for row in conn.execute(
+                    f"select empresa as company, grupo_id::int as entity_id, nome as label from {quoted_schema}.dim_grupos where (%s::text is null or empresa = %s::text)",
+                    (company, company),
+                ).fetchall():
+                    if row["label"] and str(row["label"]).strip():
+                        grupo_labels[(row["company"], int(row["entity_id"]))] = str(row["label"]).strip()
+            if relation_exists(conn, "dim_atendentes"):
+                for row in conn.execute(
+                    f"select empresa as company, atendente_id::int as entity_id, nome as label from {quoted_schema}.dim_atendentes where (%s::text is null or empresa = %s::text)",
+                    (company, company),
+                ).fetchall():
+                    if row["label"] and str(row["label"]).strip():
+                        atendente_labels[(row["company"], int(row["entity_id"]))] = str(row["label"]).strip()
+            if relation_exists(conn, "produtos"):
+                for row in conn.execute(
+                    f"select empresa as company, produto_id::int as entity_id, descricao as label from {quoted_schema}.produtos where (%s::text is null or empresa = %s::text)",
+                    (company, company),
+                ).fetchall():
+                    if row["label"] and str(row["label"]).strip():
+                        produto_labels[(row["company"], int(row["entity_id"]))] = str(row["label"]).strip()
+
+        fallback_company = company or ""
+
+        def label_for(kind: str, entity_id: int, labels: dict[tuple[str, int], str]) -> str:
+            if entity_id == 0:
+                return "Não informado"
+            key = (fallback_company, entity_id) if fallback_company else None
+            if key and key in labels:
+                return labels[key]
+            for (comp, eid), lab in labels.items():
+                if eid == entity_id:
+                    return lab
+            return f"{kind} #{entity_id}"
+
+        # Index current por chave (sales_date, grupo, produto, atendente)
+        current_by_key: dict[tuple[str, int, int, int], dict[str, Any]] = {}
+        current_dow_by_key: dict[tuple[str, int, int, int], int] = {}
+        for r in current_rows:
+            key = (str(r["sales_date"]), int(r["grupo_id"]), int(r["produto_id"]), int(r["atendente_id"]))
+            current_by_key[key] = r
+            current_dow_by_key[key] = int(r["dow"])
+
+        # Seed: agrupar por (dow, grupo, produto, atendente) -> lista ordenada por data desc, pegar até 4
+        from collections import defaultdict
+        seed_bucket: dict[tuple[int, int, int, int], list[dict[str, Any]]] = defaultdict(list)
+        for r in raw_seed_rows:
+            key = (int(r["dow"]), int(r["grupo_id"]), int(r["produto_id"]), int(r["atendente_id"]))
+            seed_bucket[key].append(r)
+        # Para cada tupla, manter só 4 mais recentes já ordenadas desc
+        for k in list(seed_bucket.keys()):
+            seed_bucket[k] = seed_bucket[k][:4]
+
+        # Goal por (sales_date_prev_year, grupo, produto, atendente)
+        goal_by_key: dict[tuple[str, int, int, int], float] = {}
+        for r in goal_rows:
+            key = (str(r["sales_date"]), int(r["grupo_id"]), int(r["produto_id"]), int(r["atendente_id"]))
+            goal_by_key[key] = float(r["goal_base"] or 0)
+
+        # Construir todas as chaves do mês (current + possíveis seeds/goals para completude)
+        # Para linhas sem vendido no dia mas com projeção, ainda geramos linha com quantity_sold=0
+        # Então all_keys = current keys + para cada current key, garantir que seed/goal sejam considerados
+        all_keys = set(current_by_key.keys())
+        # Adicionar também chaves que só têm seed/goal mas não current? Para matriz diária por dia,
+        # só mostramos dias do mês selecionado; então não precisamos adicionar chaves fora do mês.
+        # Mas mantemos current como fonte de datas.
+
+        result: list[dict[str, Any]] = []
+        for key in sorted(all_keys):
+            sales_date, grupo_id, produto_id, atendente_id = key
+            cur = current_by_key[key]
+            dow = current_dow_by_key[key]
+            quantity_sold = float(cur["quantity_sold"] or 0)
+            revenue = float(cur["revenue"] or 0)
+
+            seed_key = (dow, grupo_id, produto_id, atendente_id)
+            seeds = seed_bucket.get(seed_key, [])
+            if seeds:
+                quantity_projected = (sum(float(s["quantity"]) for s in seeds) / len(seeds)) * (1 + quantity_growth_pct / 100.0)
+                revenue_projected = (sum(float(s["revenue"]) for s in seeds) / len(seeds)) * (1 + revenue_growth_pct / 100.0)
+            else:
+                quantity_projected = None
+                revenue_projected = None
+
+            # Goal: mesmo dia no ano anterior
+            try:
+                cur_date = date.fromisoformat(sales_date)
+                goal_date_str = date(cur_date.year - 1, cur_date.month, cur_date.day).isoformat()
+            except ValueError:
+                goal_date_str = ""
+            goal_base = goal_by_key.get((goal_date_str, grupo_id, produto_id, atendente_id))
+            goal = (goal_base * (1 + goal_growth_pct / 100.0)) if goal_base is not None else None
+
+            empresa_label = fallback_company
+            result.append({
+                "sales_date": sales_date,
+                "week": dow,
+                "grupo_id": grupo_id,
+                "produto_id": produto_id,
+                "atendente_id": atendente_id,
+                "grupo_label": label_for("Grupo", grupo_id, grupo_labels),
+                "produto_label": label_for("Produto", produto_id, produto_labels),
+                "atendente_label": label_for("Atendente", atendente_id, atendente_labels),
+                "company": empresa_label,
+                "quantity_sold": round(quantity_sold, 4),
+                "quantity_projected": round(quantity_projected, 4) if quantity_projected is not None else None,
+                "quantity_completion_pct": round(quantity_sold / quantity_projected, 6) if quantity_projected else None,
+                "revenue": round(revenue, 4),
+                "revenue_projected": round(revenue_projected, 4) if revenue_projected is not None else None,
+                "revenue_completion_pct": round(revenue / revenue_projected, 6) if revenue_projected else None,
+                "goal": round(goal, 4) if goal is not None else None,
+                "goal_completion_pct": round(revenue / goal, 6) if goal else None,
+            })
+
+        if len(result) > 5000:
+            result = sorted(result, key=lambda x: x["revenue"], reverse=True)[:5000]
+
+        result.sort(key=lambda x: (x["sales_date"], x["grupo_label"], x["produto_label"], x["atendente_label"]))
+        return result

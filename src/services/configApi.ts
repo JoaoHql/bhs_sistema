@@ -72,6 +72,10 @@ export const configApi = {
     return apiClient.post<{ email: string, password: string, clientSlug?: string }, LoginResponse>('/api/v1/auth/login', { email, password, ...(clientSlug ? { clientSlug } : {}) });
   },
 
+  refresh(): Promise<LoginResponse> {
+    return apiClient.post<Record<string, never>, LoginResponse>('/api/v1/auth/refresh', {});
+  },
+
   changePassword(payload: ChangePasswordRequest): Promise<LoginResponse> {
     return apiClient.post<ChangePasswordRequest, LoginResponse>('/api/v1/auth/change-password', payload);
   },

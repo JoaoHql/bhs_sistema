@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, Request, Response
 
-from app.dependencies.identity import AuthenticatedIdentity, get_password_change_identity
+from app.dependencies.identity import AuthenticatedIdentity, get_current_user, get_password_change_identity
 from app.dependencies.redis import enforce_rate_limit
 from app.dependencies.services import get_audit_service, get_authentication_service
 from app.schemas.auth import LoginRequest, LoginResponse
-from app.schemas.user import ChangePasswordRequest
+from app.schemas.user import ChangePasswordRequest, User
 from app.services.authentication_service import AuthenticationService
 from app.services.audit_service import AuditService
 
@@ -28,6 +28,24 @@ async def login(
         limit=5,
     )
     return await service.login(request)
+
+
+@router.post("/refresh", response_model=LoginResponse)
+async def refresh(
+    current_user: User = Depends(get_current_user),
+    service: AuthenticationService = Depends(get_authentication_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> LoginResponse:
+    response = await service.refresh(current_user)
+    await audit.log_action(
+        actor_id=current_user.id,
+        client_id=current_user.client_id,
+        action="auth.token_refreshed",
+        resource_type="user",
+        resource_id=current_user.id,
+        status="success",
+    )
+    return response
 
 
 @router.post("/change-password", response_model=LoginResponse)

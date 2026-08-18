@@ -24,6 +24,7 @@ import {
 import { configApi, isConfigApiEnabled } from '../services/configApi';
 import { isStaffLibraryScreenEnabled } from '../config/staffLibrary';
 import { clearTenantDataCache } from '../services/tenantDataCache';
+import { clearSession } from '../services/authToken';
 
 interface SidebarProps {
   currentTab: string;
@@ -805,7 +806,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button type="button" onClick={() => { setAccountMenuOpen(false); onOpenAccount(); }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"><CircleUserRound className="h-4 w-4 text-slate-500" />Minha conta</button>
               {(isStaff || isTenantMaster) && <button type="button" onClick={() => { setAccountMenuOpen(false); setCurrentTab('configuracoes'); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"><Sliders className="h-4 w-4 text-slate-500" />{isStaff ? 'Painel de controle' : 'Gestão de usuários'}</button>}
               {canReorder && !isStaff && <button type="button" onClick={() => { setAccountMenuOpen(false); setEditMode(true); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"><Pencil className="h-4 w-4 text-slate-500" />Editar menu</button>}
-              {isStaff && <button type="button" onClick={() => { const enabled = isConfigApiEnabled(); localStorage.setItem('bhs_config_api_enabled', enabled ? 'false' : 'true'); localStorage.removeItem('bhs_auth_token'); clearTenantDataCache(); window.location.reload(); }} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold ${isConfigApiEnabled() ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'}`}><Database className="h-4 w-4" />{isConfigApiEnabled() ? 'Ativar modo mockado' : 'Conectar à API real'}</button>}
+              {isStaff && <button type="button" onClick={() => { const enabled = isConfigApiEnabled(); localStorage.setItem('bhs_config_api_enabled', enabled ? 'false' : 'true'); clearSession(); clearTenantDataCache(); window.location.reload(); }} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold ${isConfigApiEnabled() ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'}`}><Database className="h-4 w-4" />{isConfigApiEnabled() ? 'Ativar modo mockado' : 'Conectar à API real'}</button>}
               <div className="my-1 border-t border-slate-100" />
               <button type="button" onClick={() => { setAccountMenuOpen(false); onLogout(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-bold text-rose-600 hover:bg-rose-50"><LogOut className="h-4 w-4" />Sair</button>
             </div>

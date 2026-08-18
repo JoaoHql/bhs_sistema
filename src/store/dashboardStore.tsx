@@ -5,6 +5,24 @@ import { getInitialDataMode, loadDashboardData, persistDataMode, syncDashboardDa
 import { configApi, isConfigApiEnabled } from '../services/configApi';
 import { ApiClientError, subscribeApiRetry } from '../services/apiClient';
 import { invalidateTenantScreen, tenantSessionKey } from '../services/tenantDataCache';
+import { clearSession, ensureFreshToken } from '../services/authToken';
+import { isStaffLibraryScreenEnabled } from '../config/staffLibrary';
+
+const LAST_TAB_KEY = 'bhs_last_tab';
+
+const readLastTab = (): string | null => {
+  try {
+    return localStorage.getItem(LAST_TAB_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const persistLastTab = (tab: string) => {
+  try {
+    if (tab) localStorage.setItem(LAST_TAB_KEY, tab);
+  } catch { /* Persistencia opcional. */ }
+};
 
 interface DashboardContextType {
   dataMode: DataMode;
@@ -241,6 +259,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [dataStatus, setDataStatus] = useState<DataStatus>('loading');
   const [dataStatusMessage, setDataStatusMessage] = useState<string>('Carregando dados...');
   const [currentTab, setCurrentTab] = useState<string>(() => isConfigApiEnabled() ? '' : 'analises-overview');
+  useEffect(() => { persistLastTab(currentTab); }, [currentTab]);
   const [screenRefreshVersion, setScreenRefreshVersion] = useState(0);
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>(initialWorkspaces);
   
@@ -278,6 +297,14 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return subscribeApiRetry(() => {
       setRetryMessage('Estabilizando conexão com o sistema...');
     });
+  }, []);
+
+  useEffect(() => {
+    if (!isConfigApiEnabled() || !localStorage.getItem('bhs_auth_token')) return;
+    const heartbeat = setInterval(() => {
+      ensureFreshToken().catch(() => { /* 401 tratado na proxima requisicao. */ });
+    }, 10 * 60 * 1000);
+    return () => clearInterval(heartbeat);
   }, []);
 
   const setCurrentUser = useCallback((user: BackendUser | null) => {
@@ -325,8 +352,17 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const pickInitialTab = useCallback((user: BackendUser | null, modules: AppModule[]) => {
     if (!isConfigApiEnabled()) return 'analises-overview';
-    if (user?.is_staff) return 'configuracoes';
-    if (user?.roles.includes('admin')) return 'configuracoes';
+    const lastTab = readLastTab();
+    const allowedScreens = new Set(modules.flatMap(module => module.screens.map(screen => screen.id)));
+    const isStaff = !!user?.is_staff;
+    const isAdmin = !isStaff && !!user?.roles.includes('admin');
+    if (lastTab && (isStaff ? isStaffLibraryScreenEnabled(lastTab) || lastTab === 'configuracoes' : allowedScreens.has(lastTab))) {
+      if (!(lastTab === 'configuracoes' && !isStaff && !isAdmin)) {
+        return lastTab;
+      }
+    }
+    if (isStaff) return 'configuracoes';
+    if (isAdmin) return 'configuracoes';
     return modules.flatMap(module => module.screens)[0]?.id ?? '';
   }, []);
 
@@ -740,7 +776,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         console.error('Erro ao carregar configuracao do backend:', error);
         if (active) {
           if (error instanceof ApiClientError && error.status === 401) {
-            localStorage.removeItem('bhs_auth_token');
+            clearSession();
             currentUserRef.current = null;
             setCurrentUserState(null);
             setConfigurationStatus('idle');

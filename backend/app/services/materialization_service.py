@@ -5,6 +5,7 @@ _AREA_TO_VIEW: dict[str, str] = {
     "vendas": "mv_vendas_diarias_resumo",
     "projecao": "mv_projecao_bases",
     "catalogo": "mv_catalogo_custos",
+    "matriz": "mv_projecao_matriz_mensal",
 }
 
 

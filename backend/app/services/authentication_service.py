@@ -64,6 +64,14 @@ class AuthenticationService:
         state = await self.repository.get_credential_state(user.id)
         return self._response(user, restricted_until=state.temporary_password_expires_at)
 
+    async def refresh(self, user: User) -> LoginResponse:
+        state = await self.repository.get_credential_state(user.id)
+        if state.credentials_version != user.credentials_version:
+            raise UnauthorizedError("Credencial invalida ou revogada.")
+        if state.must_change_password != user.must_change_password:
+            raise UnauthorizedError("Estado da credencial foi alterado.")
+        return self._response(user, restricted_until=state.temporary_password_expires_at)
+
     async def change_password(
         self,
         user: User,

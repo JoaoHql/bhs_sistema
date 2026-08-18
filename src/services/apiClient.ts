@@ -34,6 +34,15 @@ const buildDefaultHeaders = (headers?: HeadersInit): HeadersInit => {
   };
 };
 
+const ensureFreshToken = async () => {
+  try {
+    const { ensureFreshToken: ensureFresh } = await import('./authToken');
+    await ensureFresh();
+  } catch {
+    // Renovacao opcional; a requisicao original segue com o token atual.
+  }
+};
+
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE_MS = 800;
 
@@ -76,6 +85,7 @@ async function executeWithRetry<T>(fn: () => Promise<T>, maxRetries = MAX_RETRIE
 export const apiClient = {
   async get<T>(path: string, init?: RequestInit): Promise<T> {
     return executeWithRetry(async () => {
+      await ensureFreshToken();
       const response = await fetch(buildUrl(path), {
         ...init,
         method: 'GET',
@@ -95,6 +105,7 @@ export const apiClient = {
 
   async post<TRequest, TResponse>(path: string, body: TRequest, init?: RequestInit): Promise<TResponse> {
     return executeWithRetry(async () => {
+      await ensureFreshToken();
       const response = await fetch(buildUrl(path), {
         ...init,
         method: 'POST',
@@ -118,6 +129,7 @@ export const apiClient = {
 
   async patch<TRequest, TResponse>(path: string, body: TRequest, init?: RequestInit): Promise<TResponse> {
     return executeWithRetry(async () => {
+      await ensureFreshToken();
       const response = await fetch(buildUrl(path), {
         ...init,
         method: 'PATCH',
@@ -141,6 +153,7 @@ export const apiClient = {
 
   async put<TRequest, TResponse>(path: string, body: TRequest, init?: RequestInit): Promise<TResponse> {
     return executeWithRetry(async () => {
+      await ensureFreshToken();
       const response = await fetch(buildUrl(path), {
         ...init,
         method: 'PUT',
@@ -164,6 +177,7 @@ export const apiClient = {
 
   async delete<T>(path: string, init?: RequestInit): Promise<T> {
     return executeWithRetry(async () => {
+      await ensureFreshToken();
       const response = await fetch(buildUrl(path), {
         ...init,
         method: 'DELETE',

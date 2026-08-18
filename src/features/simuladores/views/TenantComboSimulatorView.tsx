@@ -110,14 +110,14 @@ export const TenantComboSimulatorView: React.FC<TenantComboSimulatorViewProps> =
     return <TenantLoadingState label="Carregando catálogo de produtos..." />;
   }
 
-  if (error || data.initialProducts.length < 3) {
+  if (error || data.initialProducts.length < 1) {
     return (
       <div className="min-h-[360px] flex items-center justify-center">
         <div className="max-w-md text-center border border-red-100 bg-red-50 rounded-xl p-6">
           <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-3" />
           <h2 className="text-sm font-bold text-red-900">Nao foi possivel preparar o Simulador de Combos</h2>
           <p className="mt-2 text-xs leading-5 text-red-700">
-            A tela precisa de ao menos tres produtos ativos com preco de referencia.
+            A tela precisa de ao menos um produto ativo com preco de referencia.
           </p>
         </div>
       </div>

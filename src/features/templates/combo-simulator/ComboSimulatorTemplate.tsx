@@ -65,6 +65,35 @@ const toProduct = (option: ComboProductOption): Product => ({
   simulatedPrice: null,
 });
 
+type ProductSlot = Product | null;
+
+const SLOT_COUNT = 3;
+
+const buildInitialSlots = (initial: ComboProductOption[]): ProductSlot[] => {
+  const mapped = initial.map(toProduct);
+  const padded: ProductSlot[] = [...mapped];
+  while (padded.length < SLOT_COUNT) padded.push(null);
+  return padded.slice(0, SLOT_COUNT);
+};
+
+const slotsToActiveProducts = (slots: ProductSlot[]): Product[] => slots.filter((slot): slot is Product => slot !== null);
+
+const fromSavedProducts = (saved: SavedSimulation['products']): ProductSlot[] => {
+  const mapped: Product[] = saved.map((p) => ({
+    id: p.id,
+    name: p.name,
+    qty: p.qty,
+    cost: p.cost,
+    price: p.price,
+    markup: p.markup,
+    simulatedCost: p.simulatedCost ?? null,
+    simulatedPrice: p.simulatedPrice ?? null,
+  }));
+  const padded: ProductSlot[] = [...mapped];
+  while (padded.length < SLOT_COUNT) padded.push(null);
+  return padded.slice(0, SLOT_COUNT);
+};
+
 const readSavedSimulations = (storageKey: string): SavedSimulation[] => {
   try {
     const saved = localStorage.getItem(storageKey);
@@ -80,8 +109,8 @@ interface ComboSimulatorTemplateProps {
 }
 
 export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ data }) => {
-  const [products, setProducts] = useState<Product[]>(() => data.initialProducts.map(toProduct));
-  const [openProductPickerId, setOpenProductPickerId] = useState<string | null>(null);
+  const [products, setProducts] = useState<ProductSlot[]>(() => buildInitialSlots(data.initialProducts));
+  const [openProductPickerIndex, setOpenProductPickerIndex] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState<string>('');
   const [remoteSearchOptions, setRemoteSearchOptions] = useState<ComboProductOption[]>([]);
 
@@ -114,7 +143,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
   }, [data.persistence]);
 
   useEffect(() => {
-    if (!data.searchCatalog || !openProductPickerId || !productSearch.trim()) {
+    if (!data.searchCatalog || openProductPickerIndex === null || !productSearch.trim()) {
       return;
     }
 
@@ -134,7 +163,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [data, openProductPickerId, productSearch]);
+  }, [data, openProductPickerIndex, productSearch]);
 
   const formatBRL = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -156,35 +185,47 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
     });
   }, [data.productCatalog, data.searchCatalog, productSearch, remoteSearchOptions]);
 
-  const getFilteredCatalog = useCallback((currentProductId: string) => {
-    return filteredCatalog.filter(option => !products.some(product => product.id !== currentProductId && product.id === option.id));
-  }, [filteredCatalog, products]);
+  const activeProductIds = useMemo(() => new Set(slotsToActiveProducts(products).map(p => p.id)), [products]);
 
-  const handleOpenProductPicker = (productId: string) => {
-    setOpenProductPickerId(prev => prev === productId ? null : productId);
+  const getFilteredCatalog = useCallback((currentIndex: number) => {
+    const currentId = products[currentIndex]?.id ?? null;
+    return filteredCatalog.filter(option => {
+      if (currentId && option.id === currentId) return true;
+      return !activeProductIds.has(option.id);
+    });
+  }, [activeProductIds, filteredCatalog, products]);
+
+  const handleOpenProductPicker = (index: number) => {
+    setOpenProductPickerIndex(prev => prev === index ? null : index);
     setProductSearch('');
   };
 
-  const handleSelectProduct = (currentProductId: string, selectedProduct: ComboProductOption) => {
-    setProducts(prev => prev.map(product => {
-      if (product.id !== currentProductId) return product;
-
+  const handleSelectProduct = (targetIndex: number, selectedProduct: ComboProductOption) => {
+    setProducts(prev => prev.map((product, idx) => {
+      if (idx !== targetIndex) return product;
+      const qty = product?.qty ?? selectedProduct.defaultQty;
       const nextProduct = {
         ...toProduct(selectedProduct),
-        qty: product.qty,
+        qty,
         simulatedCost: null,
         simulatedPrice: null,
       };
       return { ...nextProduct, markup: getMarkup(nextProduct) };
     }));
-    setOpenProductPickerId(null);
+    setOpenProductPickerIndex(null);
+    setProductSearch('');
+  };
+
+  const handleClearSlot = (targetIndex: number) => {
+    setProducts(prev => prev.map((product, idx) => (idx === targetIndex ? null : product)));
+    setOpenProductPickerIndex(null);
     setProductSearch('');
   };
 
   // Funções de recálculo individual
-  const updateProductField = (id: string, field: EditableProductField, value: string) => {
-    setProducts(prev => prev.map(p => {
-      if (p.id !== id) return p;
+  const updateProductField = (index: number, field: EditableProductField, value: string) => {
+    setProducts(prev => prev.map((p, idx) => {
+      if (idx !== index || p === null) return p;
 
       const parsed = parseSimulationValue(value);
       const updated = { ...p };
@@ -206,9 +247,10 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
     }));
   };
 
-  // Aplicação de simulação conjunta
+  // Aplicação de simulação conjunta - apenas em slots ativos
   const applyJointMarkup = (markupValue: number) => {
     setProducts(prev => prev.map(p => {
+      if (p === null) return p;
       const updated = {
         ...p,
         simulatedPrice: Math.round(getEffectiveCost(p) * (1 + markupValue / 100) * 100) / 100
@@ -219,6 +261,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
 
   const applyJointPriceDelta = (deltaPercent: number) => {
     setProducts(prev => prev.map(p => {
+      if (p === null) return p;
       const updated = {
         ...p,
         simulatedPrice: deltaPercent === 0
@@ -231,6 +274,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
 
   const applyJointCostDelta = (deltaPercent: number) => {
     setProducts(prev => prev.map(p => {
+      if (p === null) return p;
       const updated = {
         ...p,
         simulatedCost: deltaPercent === 0
@@ -242,26 +286,31 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
   };
 
   const applyJointQty = (qtyValue: number) => {
-    setProducts(prev => prev.map(p => ({
-      ...p,
-      qty: qtyValue
-    })));
+    setProducts(prev => prev.map(p => {
+      if (p === null) return p;
+      return { ...p, qty: qtyValue };
+    }));
   };
 
   // Resetar simulação
   const handleReset = () => {
-    setProducts(data.initialProducts.map(toProduct));
+    setProducts(buildInitialSlots(data.initialProducts));
     setJointMarkup('');
     setJointPriceDelta(0);
     setJointCostDelta(0);
     setJointQty('');
-    setOpenProductPickerId(null);
+    setOpenProductPickerIndex(null);
     setProductSearch('');
   };
 
-  // Salvar Simulação
+  // Salvar Simulação - apenas slots ativos
   const handleSaveSimulation = async () => {
     if (!newSimName.trim()) return;
+    const active = slotsToActiveProducts(products);
+    if (active.length === 0) {
+      setSimulationError('Selecione ao menos um produto para salvar o cenário.');
+      return;
+    }
 
     setSimulationError(null);
     setSuccessMessage(null);
@@ -270,7 +319,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
       if (data.persistence) {
         const newSim = await data.persistence.createSavedSimulation({
           name: newSimName.trim(),
-          products,
+          products: active,
         });
         setSavedSimulations(current => [newSim, ...current]);
       } else {
@@ -278,7 +327,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
           id: Date.now().toString(),
           name: newSimName.trim(),
           createdAt: new Date().toISOString(),
-          products: [...products],
+          products: [...active],
         };
         const updated = [newSim, ...savedSimulations];
         setSavedSimulations(updated);
@@ -296,13 +345,13 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
 
   // Carregar Simulação
   const handleLoadSimulation = (sim: SavedSimulation) => {
-    setProducts(sim.products);
+    setProducts(fromSavedProducts(sim.products));
     // Limpa controles em lote para evitar confusão visual
     setJointMarkup('');
     setJointPriceDelta(0);
     setJointCostDelta(0);
     setJointQty('');
-    setOpenProductPickerId(null);
+    setOpenProductPickerIndex(null);
     setProductSearch('');
   };
 
@@ -332,12 +381,12 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
       : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(parsed);
   };
 
-  // Exportar Excel (CSV)
+  // Exportar Excel (CSV) - apenas ativos
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += "ID;Produto;Quantidade;Custo Unitario (R$);Preco Venda (R$);Markup (%);Total Custo (R$);Total Receita (R$);Margem (R$)\n";
     
-    products.forEach(p => {
+    slotsToActiveProducts(products).forEach(p => {
       const cost = getEffectiveCost(p);
       const price = getEffectivePrice(p);
       const markup = getMarkup(p);
@@ -358,13 +407,15 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
     document.body.removeChild(link);
   };
 
-  // Cálculos consolidados do resumo
+  // Cálculos consolidados do resumo - apenas slots ativos
+  const activeProducts = useMemo(() => slotsToActiveProducts(products), [products]);
+
   const totals = (() => {
     let totalQty = 0;
     let totalCost = 0;
     let totalRevenue = 0;
 
-    products.forEach(p => {
+    activeProducts.forEach(p => {
       totalQty += p.qty;
       totalCost += p.qty * getEffectiveCost(p);
       totalRevenue += p.qty * getEffectivePrice(p);
@@ -385,9 +436,19 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
   })();
 
   const baselineTotals = (() => {
-    const baselineProducts = data.initialProducts.map(toProduct);
-    const cost = baselineProducts.reduce((total, product) => total + product.qty * product.cost, 0);
-    const revenue = baselineProducts.reduce((total, product) => total + product.qty * product.price, 0);
+    // Baseline considera apenas produtos ativos (custo/preço base sem simulação)
+    let cost = 0;
+    let revenue = 0;
+    activeProducts.forEach(product => {
+      cost += product.qty * product.cost;
+      revenue += product.qty * product.price;
+    });
+    // fallback se nenhum ativo: usa initialProducts base para evitar divisao por zero visual
+    if (activeProducts.length === 0) {
+      const baselineProducts = data.initialProducts.map(toProduct);
+      cost = baselineProducts.reduce((total, product) => total + product.qty * product.cost, 0);
+      revenue = baselineProducts.reduce((total, product) => total + product.qty * product.price, 0);
+    }
     const profit = revenue - cost;
 
     return {
@@ -425,7 +486,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
             Simulador de Combos de Produtos
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Simule combos comerciais com até 3 produtos. Ajuste preços, custos ou markups individualmente ou em lote para visualizar margens consolidadas.
+            Simule combos com 1 a 3 produtos — deixe blocos vazios em “Nenhum (deixar vazio)” para simular apenas 1 ou 2 itens. Ajuste preços, custos ou markups individualmente ou em lote.
           </p>
         </div>
         <div className="flex gap-2">
@@ -553,6 +614,17 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
           </div>
 
         </div>
+        {activeProducts.length === 0 && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>Nenhum produto ativo. Selecione ao menos um produto em um dos blocos abaixo para calcular a simulação.</span>
+          </div>
+        )}
+        {activeProducts.length > 0 && activeProducts.length < 3 && (
+          <p className="text-[11px] text-slate-500 font-medium">
+            Simulando com {activeProducts.length} produto{activeProducts.length === 1 ? '' : 's'} — blocos vazios são ignorados no consolidado.
+          </p>
+        )}
       </div>
 
       {/* SEÇÃO 2: PAINEL DE CONFIGURAÇÕES EM LOTE (ALINHAMENTO CORRIGIDO) */}
@@ -656,6 +728,81 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {products.map((product, idx) => {
+            if (product === null) {
+              const isPickerOpen = openProductPickerIndex === idx;
+              return (
+                <div key={`empty-${idx}`} className="bg-white border border-dashed border-slate-300 rounded-xl p-5 shadow-sm flex flex-col justify-between opacity-90">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-start gap-2 border-b border-slate-100 pb-3">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Solução {idx + 1}</span>
+                        <h3 className="text-sm font-bold text-slate-400 leading-snug">Vazio — sem produto</h3>
+                        <p className="text-[11px] text-slate-400 mt-1">Este bloco não entra na simulação. Selecione um produto para ativar.</p>
+                      </div>
+                      <div className="shrink-0 px-2 py-0.5 bg-slate-50 border border-slate-200 text-slate-400 rounded text-[9px] font-bold">VAZIO</div>
+                    </div>
+                    <div className="relative">
+                      <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Produto da Solucao</label>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenProductPicker(idx)}
+                        className="w-full min-h-10 px-3 py-2 border border-dashed border-slate-300 hover:border-blue-300 bg-slate-50 hover:bg-white rounded-lg text-left transition-all flex items-center justify-between gap-2 cursor-pointer"
+                      >
+                        <span className="text-xs font-bold text-slate-400 truncate">— Nenhum (clique para selecionar) —</span>
+                        <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${isPickerOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isPickerOpen && (
+                        <div className="absolute z-40 mt-2 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
+                          <div className="p-2 border-b border-slate-100">
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                              <input
+                                autoFocus
+                                type="text"
+                                value={productSearch}
+                                onChange={event => setProductSearch(event.target.value)}
+                                placeholder="Pesquisar produto..."
+                                className="w-full h-8 pl-8 pr-3 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-56 overflow-y-auto py-1 scrollbar-thin">
+                            {getFilteredCatalog(idx).length > 0 ? (
+                              getFilteredCatalog(idx).map(option => (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  onClick={() => handleSelectProduct(idx, option)}
+                                  className="w-full px-3 py-2.5 text-left flex items-start justify-between gap-3 hover:bg-blue-50 transition-colors cursor-pointer"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-extrabold text-slate-700 truncate">{option.name}</p>
+                                    <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Custo {formatBRL(option.cost)} | Venda {formatBRL(option.price)} | Markup {formatPercent(option.cost > 0 ? ((option.price - option.cost) / option.cost) * 100 : 0)}</p>
+                                  </div>
+                                  <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5 opacity-0" />
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-3 py-5 text-center"><p className="text-xs font-bold text-slate-400">Nenhum produto encontrado.</p></div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3.5 opacity-50 pointer-events-none">
+                      <div className="flex justify-between items-center gap-4"><label className="text-xs font-bold text-slate-400">Quantidade</label><span className="w-28 px-2.5 py-1 border border-slate-200 rounded-lg text-xs text-right font-bold text-slate-400 bg-slate-50">—</span></div>
+                      <div className="flex justify-between items-center gap-4"><label className="text-xs font-bold text-slate-400">Custo Unitário</label><span className="w-28 px-2.5 py-1 border border-slate-200 rounded-lg text-xs text-right font-bold text-slate-400 bg-slate-50">—</span></div>
+                      <div className="flex justify-between items-center gap-4"><label className="text-xs font-bold text-slate-400">Preço de Venda</label><span className="w-28 px-2.5 py-1 border border-slate-200 rounded-lg text-xs text-right font-bold text-slate-400 bg-slate-50">—</span></div>
+                      <div className="flex justify-between items-center gap-4"><label className="text-xs font-bold text-slate-400">Markup (%)</label><span className="w-28 px-2.5 py-1 border border-slate-200 rounded-lg text-xs text-right font-bold text-slate-400 bg-slate-50">—</span></div>
+                    </div>
+                  </div>
+                  <div className="mt-5 pt-3 border-t border-slate-100">
+                    <p className="text-[11px] text-slate-400 text-center font-medium">Bloco inativo — não contabilizado no consolidado.</p>
+                  </div>
+                </div>
+              );
+            }
+
             const effectiveCost = getEffectiveCost(product);
             const effectivePrice = getEffectivePrice(product);
             const effectiveMarkup = getMarkup(product);
@@ -685,14 +832,14 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
                     <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Produto da Solucao</label>
                     <button
                       type="button"
-                      onClick={() => handleOpenProductPicker(product.id)}
+                      onClick={() => handleOpenProductPicker(idx)}
                       className="w-full min-h-10 px-3 py-2 border border-slate-200 hover:border-blue-300 bg-slate-50 hover:bg-white rounded-lg text-left transition-all flex items-center justify-between gap-2 cursor-pointer"
                     >
                       <span className="text-xs font-bold text-slate-700 truncate">{product.name}</span>
-                      <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${openProductPickerId === product.id ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${openProductPickerIndex === idx ? 'rotate-180' : ''}`} />
                     </button>
 
-                    {openProductPickerId === product.id && (
+                    {openProductPickerIndex === idx && (
                       <div className="absolute z-40 mt-2 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
                         <div className="p-2 border-b border-slate-100">
                           <div className="relative">
@@ -709,15 +856,26 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
                         </div>
 
                         <div className="max-h-56 overflow-y-auto py-1 scrollbar-thin">
-                          {getFilteredCatalog(product.id).length > 0 ? (
-                            getFilteredCatalog(product.id).map(option => {
+                          <button
+                            type="button"
+                            onClick={() => handleClearSlot(idx)}
+                            className="w-full px-3 py-2.5 text-left flex items-center justify-between gap-3 hover:bg-red-50 border-b border-slate-100 transition-colors cursor-pointer"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-extrabold text-red-600">— Nenhum (deixar vazio) —</p>
+                              <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Remove este produto da simulação</p>
+                            </div>
+                            <Trash2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                          </button>
+                          {getFilteredCatalog(idx).length > 0 ? (
+                            getFilteredCatalog(idx).map(option => {
                               const isCurrent = option.id === product.id;
 
                               return (
                                 <button
                                   key={option.id}
                                   type="button"
-                                  onClick={() => handleSelectProduct(product.id, option)}
+                                  onClick={() => handleSelectProduct(idx, option)}
                                   className={`w-full px-3 py-2.5 text-left flex items-start justify-between gap-3 hover:bg-blue-50 transition-colors cursor-pointer ${isCurrent ? 'bg-blue-50/70' : ''}`}
                                 >
                                   <div className="min-w-0">
@@ -748,7 +906,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
                       <input
                         type="number"
                         value={product.qty}
-                        onChange={e => updateProductField(product.id, 'qty', e.target.value)}
+                        onChange={e => updateProductField(idx, 'qty', e.target.value)}
                         className="w-28 px-2.5 py-1 border border-slate-200 rounded-lg text-xs text-right font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
@@ -764,7 +922,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
                           type="number"
                           step="0.01"
                           value={effectiveCost}
-                          onChange={e => updateProductField(product.id, 'cost', e.target.value)}
+                          onChange={e => updateProductField(idx, 'cost', e.target.value)}
                           className="w-28 pl-7 pr-2.5 py-1 border border-slate-200 rounded-lg text-xs text-right font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
@@ -781,7 +939,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
                           type="number"
                           step="0.01"
                           value={effectivePrice}
-                          onChange={e => updateProductField(product.id, 'price', e.target.value)}
+                          onChange={e => updateProductField(idx, 'price', e.target.value)}
                           className="w-28 pl-7 pr-2.5 py-1 border border-slate-200 rounded-lg text-xs text-right font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
@@ -796,7 +954,7 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
                           type="number"
                           step="0.1"
                           value={effectiveMarkup}
-                          onChange={e => updateProductField(product.id, 'markup', e.target.value)}
+                          onChange={e => updateProductField(idx, 'markup', e.target.value)}
                           className="w-28 pl-2.5 pr-7 py-1 border border-slate-200 rounded-lg text-xs text-right font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
@@ -855,7 +1013,8 @@ export const ComboSimulatorTemplate: React.FC<ComboSimulatorTemplateProps> = ({ 
             </div>
             <button
               onClick={handleSaveSimulation}
-              disabled={!newSimName.trim() || isSavingSimulation || isDeletingSimulationId !== null}
+              disabled={!newSimName.trim() || isSavingSimulation || isDeletingSimulationId !== null || activeProducts.length === 0}
+              title={activeProducts.length === 0 ? 'Selecione ao menos um produto para salvar' : undefined}
               className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-blue-600/20"
             >
               {isSavingSimulation ? (

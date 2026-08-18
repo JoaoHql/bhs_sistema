@@ -7,6 +7,7 @@ import { ToastNotification } from '../components/shared/ToastNotification';
 import { GlobalTopLoader } from '../components/shared/GlobalTopLoader';
 import { useGlobalActivity } from '../hooks/useTenantData';
 import { clearTenantDataCache } from '../services/tenantDataCache';
+import { clearSession } from '../services/authToken';
 import { isConfigApiEnabled } from '../services/configApi';
 import { AccountDialog } from '../components/account/AccountDialog';
 
@@ -105,7 +106,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         setCollapsed={setSidebarCollapsed} 
         onOpenAccount={() => setAccountOpen(true)}
         onLogout={() => {
-          localStorage.removeItem('bhs_auth_token');
+          clearSession();
           localStorage.setItem('bhs_config_api_enabled', 'true');
           clearTenantDataCache();
           setCurrentTab('');
@@ -273,7 +274,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         onClick={() => {
                           const current = isConfigApiEnabled();
                           localStorage.setItem('bhs_config_api_enabled', current ? 'false' : 'true');
-                          localStorage.removeItem('bhs_auth_token');
+                          clearSession();
                           clearTenantDataCache();
                           window.location.reload();
                         }}
@@ -311,7 +312,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     <div className="px-2.5 py-1">
                       <button
                         onClick={() => {
-                          localStorage.removeItem('bhs_auth_token');
+                          clearSession();
                           localStorage.setItem('bhs_config_api_enabled', 'true');
                           clearTenantDataCache();
                           setUserMenuOpen(false);

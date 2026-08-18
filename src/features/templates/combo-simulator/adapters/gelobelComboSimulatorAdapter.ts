@@ -45,7 +45,7 @@ export const buildGelobelComboSimulationData = (
 
   return {
     productCatalog,
-    initialProducts: initialProducts.length === 3 ? initialProducts : productCatalog.slice(0, 3),
+    initialProducts: initialProducts.length > 0 ? initialProducts : productCatalog.slice(0, 3),
     storageKey: `gelobel_saved_combo_simulations_${selectedCompany}`,
     searchCatalog,
   };
